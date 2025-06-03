@@ -1,48 +1,42 @@
 package com.example.demo.entity;
 
 import jakarta.persistence.*;
-import java.math.BigDecimal;
 
 @Entity
 @Table(name = "user_profiles")
 public class UserProfile {
     @Id
     private Long userId;
-    private User user;
+    
     @Column(nullable = false)
     private String displayName;
     
-    @Column(name = "profile_picture_url")
+    @Column(name = "profile_image_path")
     private String profilePictureUrl;
     
-    @Column
+    @Column(columnDefinition = "TEXT")
     private String bio;
     
-    @Column(name = "contact_info")
     private String contactInfo;
     
-    @Column(name = "rating_avg")
-    private BigDecimal ratingAvg;
+    private Double ratingAvg;
     
-    @Column(name = "rating_count")
     private Integer ratingCount;
     
-    // Constructors, getters, and setters
-    public User getUser() {
-        return user;
-    }
-
-    public void setUser(User user) {
-        this.user = user;
-    }
-    public UserProfile() {
-    }
+    @OneToOne
+    @JoinColumn(name = "userId", insertable = false, updatable = false)
+    private User user;
     
+    // Default constructor
+    public UserProfile() {}
+    
+    // Add this constructor
     public UserProfile(Long userId, String displayName) {
         this.userId = userId;
         this.displayName = displayName;
     }
     
+    // Getters and setters
     public Long getUserId() {
         return userId;
     }
@@ -83,11 +77,11 @@ public class UserProfile {
         this.contactInfo = contactInfo;
     }
     
-    public BigDecimal getRatingAvg() {
+    public Double getRatingAvg() {
         return ratingAvg;
     }
     
-    public void setRatingAvg(BigDecimal ratingAvg) {
+    public void setRatingAvg(Double ratingAvg) {
         this.ratingAvg = ratingAvg;
     }
     
@@ -97,5 +91,13 @@ public class UserProfile {
     
     public void setRatingCount(Integer ratingCount) {
         this.ratingCount = ratingCount;
+    }
+    
+    public User getUser() {
+        return user;
+    }
+    
+    public void setUser(User user) {
+        this.user = user;
     }
 }

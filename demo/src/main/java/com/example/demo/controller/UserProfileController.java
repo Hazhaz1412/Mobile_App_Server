@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import com.example.demo.dto.UserProfileResponse;
+import java.math.BigDecimal;
 import java.nio.file.Paths;
 
 @RestController
@@ -90,10 +91,22 @@ public class UserProfileController {
         UserProfileResponse response = new UserProfileResponse();
         response.setUserId(profile.getUserId());
         response.setDisplayName(profile.getDisplayName());
-        response.setEmail(profile.getUser() != null ? profile.getUser().getEmail() : null);
+        
+        // Xử lý an toàn nếu user là null
+        if (profile.getUser() != null) {
+            response.setEmail(profile.getUser().getEmail());
+        } else {
+            response.setEmail(null);
+        }
+        
         response.setBio(profile.getBio());
         response.setContactInfo(profile.getContactInfo());
-        response.setRatingAvg(profile.getRatingAvg());
+        
+        // Convert Double to BigDecimal
+        if (profile.getRatingAvg() != null) {
+            response.setRatingAvg(new BigDecimal(profile.getRatingAvg().toString()));
+        }
+        
         response.setRatingCount(profile.getRatingCount());
         response.setProfilePictureUrl(profile.getProfilePictureUrl());
         return response;
