@@ -21,6 +21,20 @@ public class StorageService {
     @Value("${app.upload.dir:${user.home}/uploads}")
     private String uploadDir;
 
+    // Add the missing deleteFile method
+    public void deleteFile(String filename) {
+        try {
+            if (filename == null || filename.isEmpty()) {
+                return; // Nothing to delete
+            }
+            
+            Path filePath = Paths.get(uploadDir).resolve(filename).normalize();
+            Files.deleteIfExists(filePath);
+        } catch (IOException e) {
+            throw new RuntimeException("Error deleting file: " + e.getMessage(), e);
+        }
+    }
+
     public String storeFile(MultipartFile file) {
         try {
             if (file.isEmpty()) {
@@ -50,16 +64,7 @@ public class StorageService {
             throw new RuntimeException("Could not store file. Error: " + e.getMessage(), e);
         }
     }
-    
-    public void deleteFile(String filename) {
-        try {
-            Path filePath = Paths.get(uploadDir).resolve(filename);
-            Files.deleteIfExists(filePath);
-        } catch (IOException e) {
-            throw new RuntimeException("Error deleting file: " + e.getMessage(), e);
-        }
-    }
-    
+
     public Resource loadFileAsResource(String filename) {
         try {
             Path filePath = Paths.get(uploadDir).resolve(filename).normalize();
