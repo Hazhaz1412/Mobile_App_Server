@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
+import com.example.demo.dto.UserProfileUpdateRequest;
 import java.util.Optional;
 
 @Service
@@ -47,5 +47,25 @@ public class UserProfileService {
             .orElseThrow(() -> new RuntimeException("User profile not found"));
     }
     
-    // Other existing methods...
+    @Transactional
+    public UserProfile updateUserProfile(Long userId, UserProfileUpdateRequest request) {
+        UserProfile profile = userProfileRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User profile not found"));
+        
+        if (request.getDisplayName() != null && !request.getDisplayName().trim().isEmpty()) {
+            profile.setDisplayName(request.getDisplayName().trim());
+        }
+        
+        if (request.getBio() != null) {
+            profile.setBio(request.getBio().trim());
+        }
+        
+        if (request.getContactInfo() != null) {
+            profile.setContactInfo(request.getContactInfo().trim());
+        }
+        
+        return userProfileRepository.save(profile);
+    }
+    
+    
 }

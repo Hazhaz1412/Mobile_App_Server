@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.ApiResponse;
+import com.example.demo.dto.UserProfileUpdateRequest;
 import com.example.demo.entity.UserProfile;
 import com.example.demo.service.StorageService;
 import com.example.demo.service.UserProfileService;
@@ -110,5 +111,25 @@ public class UserProfileController {
         response.setRatingCount(profile.getRatingCount());
         response.setProfilePictureUrl(profile.getProfilePictureUrl());
         return response;
+    }
+
+    @PutMapping("/{userId}/profile")
+    public ResponseEntity<ApiResponse> updateUserProfile(
+            @PathVariable Long userId,
+            @RequestBody UserProfileUpdateRequest request) {
+        try {
+            UserProfile updatedProfile = userProfileService.updateUserProfile(userId, request);
+            return ResponseEntity.ok(new ApiResponse(
+                true,
+                "Profile updated successfully",
+                updatedProfile.getUserId()
+            ));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(new ApiResponse(
+                false,
+                "Error updating profile: " + e.getMessage()
+            ));
+        }
     }
 }
