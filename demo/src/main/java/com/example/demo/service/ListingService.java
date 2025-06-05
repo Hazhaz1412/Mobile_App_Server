@@ -5,11 +5,16 @@ import com.example.demo.entity.*;
 import com.example.demo.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -36,7 +41,10 @@ public class ListingService {
     private UserRepository userRepository;
     
     @Autowired
-    private UserProfileRepository userProfileRepository; // Thêm dòng này
+    private UserProfileRepository userProfileRepository;
+    
+    @Autowired
+    private UserActivityRepository userActivityRepository;
     
     @Autowired
     private FileStorageService fileStorageService;
@@ -230,14 +238,144 @@ public class ListingService {
         return listings.map(this::convertToResponse);
     }
     
-    public Page<ListingResponse> getListingsByCategory(Long categoryId, Pageable pageable) {
-        Page<Listing> listings = listingRepository.findByCategoryIdAndStatusOrderByCreatedAtDesc(categoryId, ListingStatus.AVAILABLE, pageable);
+    /**
+     * Advanced search with multiple criteria
+     */
+    public Page<ListingResponse> searchListings(SearchCriteria criteria) {
+        Pageable pageable = createPageable(criteria);
+        
+        Page<Listing> listings;
+        
+        // If distance criteria is provided, use distance-based search
+        if (criteria.getLatitude() != null && criteria.getLongitude() != null && 
+            criteria.getMaxDistance() != null && criteria.getMaxDistance() > 0) {
+            
+            listings = listingRepository.searchWithDistance(
+                criteria.getKeyword(),
+                criteria.getCategoryId(),
+                criteria.getConditionId(),
+                criteria.getMinPrice(),
+                criteria.getMaxPrice(),
+                criteria.getLatitude(),
+                criteria.getLongitude(),
+                criteria.getMaxDistance(),
+                ListingStatus.AVAILABLE,
+                pageable
+            );
+        } else {
+            // Regular search without distance
+            listings = listingRepository.searchWithCriteria(
+                criteria.getKeyword(),
+                criteria.getCategoryId(),
+                criteria.getConditionId(),
+                criteria.getMinPrice(),
+                criteria.getMaxPrice(),
+                ListingStatus.AVAILABLE,
+                pageable
+            );
+        }
+        
         return listings.map(this::convertToResponse);
     }
     
-    public Page<ListingResponse> searchListings(String keyword, Pageable pageable) {
-        Page<Listing> listings = listingRepository.searchByKeyword(keyword, ListingStatus.AVAILABLE, pageable);
+    /**
+     * Get personalized recommendations for user
+     */
+    public Page<ListingResponse> getRecommendations(Long userId, Pageable pageable) {
+        if (userId != null) {
+            // Get user's preferred categories based on browsing history
+            List<Long> preferredCategories = getUserPreferredCategories(userId);
+            
+            if (!preferredCategories.isEmpty()) {
+                // Get listings from preferred categories
+                Page<Listing> listings = listingRepository.findByPreferredCategories(
+                    preferredCategories, ListingStatus.AVAILABLE, pageable
+                );
+                
+                if (listings.hasContent()) {
+                    return listings.map(this::convertToResponse);
+                }
+            }
+        }
+        
+        // Fallback to popular listings
+        return getPopularListings(pageable);
+    }
+    
+    /**
+     * Get popular listings
+     */
+    public Page<ListingResponse> getPopularListings(Pageable pageable) {
+        Page<Listing> listings = listingRepository.findPopularListings(ListingStatus.AVAILABLE, pageable);
         return listings.map(this::convertToResponse);
+    }
+    
+    /**
+     * Get nearby listings
+     */
+    public Page<ListingResponse> getNearbyListings(BigDecimal latitude, BigDecimal longitude, 
+                                                 Double maxDistance, Pageable pageable) {
+        if (latitude == null || longitude == null || maxDistance == null || maxDistance <= 0) {
+            return getPopularListings(pageable);
+        }
+        
+        Page<Listing> listings = listingRepository.findNearbyListings(
+            latitude, longitude, maxDistance, ListingStatus.AVAILABLE, pageable
+        );
+        return listings.map(this::convertToResponse);
+    }
+    
+    /**
+     * Get listings by category with personalization
+     */
+    public Page<ListingResponse> getListingsByCategory(Long categoryId, Pageable pageable) {
+        Page<Listing> listings = listingRepository.findPopularListingsByCategory(
+            categoryId, ListingStatus.AVAILABLE, pageable
+        );
+        return listings.map(this::convertToResponse);
+    }
+    
+    /**
+     * Track user activity for recommendations
+     */
+    @Transactional
+    public void trackUserActivity(Long userId, Long listingId, ActivityType activityType) {
+        if (userId == null || listingId == null) return;
+        
+        // Avoid duplicate entries for the same activity within 1 hour
+        LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
+        boolean recentActivity = userActivityRepository.existsByUserIdAndListingIdAndActivityTypeAndCreatedAtAfter(
+            userId, listingId, activityType, oneHourAgo
+        );
+        
+        if (!recentActivity) {
+            UserActivity activity = new UserActivity(userId, listingId, activityType);
+            userActivityRepository.save(activity);
+        }
+    }
+    
+    /**
+     * Get listing detail with activity tracking
+     */
+    @Transactional
+    public ListingResponse getListingById(Long listingId, Long userId) {
+        Optional<Listing> listingOptional = listingRepository.findById(listingId);
+        if (listingOptional.isEmpty()) {
+            throw new RuntimeException("Listing không tồn tại!");
+        }
+        
+        Listing listing = listingOptional.get();
+        
+        // Increment view count
+        listing.setViewCount(listing.getViewCount() + 1);
+        listingRepository.save(listing);
+        
+        // Track user activity if user is logged in
+        if (userId != null) {
+            trackUserActivity(userId, listingId, ActivityType.VIEW);
+        }
+        
+        return convertToResponse(listing);
     }
     
     public ListingResponse getListingById(Long listingId) {
@@ -329,6 +467,59 @@ public class ListingService {
         List<ListingTag> tags = listingTagRepository.findByListingId(listing.getId());
         response.setTags(tags.stream().map(ListingTag::getTagName).collect(Collectors.toList()));
         
+        // Fix image URLs
+        List<String> fixedImageUrls = new ArrayList<>();
+        for (String imageUrl : response.getImageUrls()) {
+            fixedImageUrls.add(fileStorageService.fixImageUrl(imageUrl));
+        }
+        response.setImageUrls(fixedImageUrls);
+        
+        if (response.getPrimaryImageUrl() != null) {
+            response.setPrimaryImageUrl(fileStorageService.fixImageUrl(response.getPrimaryImageUrl()));
+        }
+        
         return response;
+    }
+    
+    /**
+     * Create pageable with proper sorting
+     */
+    private Pageable createPageable(SearchCriteria criteria) {
+        Sort sort;
+        
+        switch (criteria.getSortBy() != null ? criteria.getSortBy().toUpperCase() : "NEWEST") {
+            case "PRICE_ASC":
+                sort = Sort.by(Sort.Direction.ASC, "price");
+                break;
+            case "PRICE_DESC":
+                sort = Sort.by(Sort.Direction.DESC, "price");
+                break;
+            case "RELEVANCE":
+                // Sort by relevance (interaction count + view count)
+                sort = Sort.by(Sort.Direction.DESC, "interactionCount", "viewCount", "createdAt");
+                break;
+            case "NEWEST":
+            default:
+                sort = Sort.by(Sort.Direction.DESC, "createdAt");
+                break;
+        }
+        
+        return PageRequest.of(criteria.getPage(), criteria.getSize(), sort);
+    }
+    
+    /**
+     * Get user's preferred categories based on browsing history
+     */
+    private List<Long> getUserPreferredCategories(Long userId) {
+        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+        
+        List<Object[]> results = userActivityRepository.findMostViewedCategories(
+            userId, ActivityType.VIEW, thirtyDaysAgo
+        );
+        
+        return results.stream()
+            .limit(5) // Top 5 categories
+            .map(result -> (Long) result[0])
+            .collect(Collectors.toList());
     }
 }

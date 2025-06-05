@@ -17,7 +17,7 @@ public class FileStorageService {
     @Value("${app.upload.dir:${user.home}/mobile-app-uploads}")
     private String uploadDir;
     
-    @Value("${app.base-url:http://localhost:8080}")
+    @Value("${app.base-url:https://zn8vnhrf-8080.asse.devtunnels.ms}")  // Sửa default value
     private String baseUrl;
     
     public String uploadImage(MultipartFile file, String subfolder) {
@@ -36,7 +36,6 @@ public class FileStorageService {
                 throw new RuntimeException("File không được để trống!");
             }
             
-            // ENABLE LẠI validation content type
             if (!isValidImageFile(file)) {
                 throw new RuntimeException("File phải là hình ảnh (JPG, PNG, WEBP)!");
             }
@@ -55,7 +54,7 @@ public class FileStorageService {
                 originalFilename = "image.jpg";
             }
             
-            String extension = ".jpg"; // Default extension
+            String extension = ".jpg"; // Force .jpg extension
             if (originalFilename.contains(".")) {
                 String originalExt = originalFilename.substring(originalFilename.lastIndexOf("."));
                 if (originalExt.toLowerCase().matches("\\.(jpg|jpeg|png|webp)")) {
@@ -73,8 +72,15 @@ public class FileStorageService {
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
             System.out.println("File saved successfully. Final size: " + Files.size(filePath) + " bytes");
             
+            // QUAN TRỌNG: Đảm bảo baseUrl luôn dùng tunnel domain
+            String tunnelUrl = baseUrl;
+            if (baseUrl.contains("localhost")) {
+                tunnelUrl = "https://zn8vnhrf-8080.asse.devtunnels.ms";
+                System.out.println("WARNING: Converting localhost to tunnel URL");
+            }
+            
             // Return URL với tunnel domain
-            String fileUrl = baseUrl + "/uploads/" + subfolder + "/" + filename;
+            String fileUrl = tunnelUrl + "/uploads/" + subfolder + "/" + filename;
             System.out.println("File URL: " + fileUrl);
             
             return fileUrl;
@@ -106,7 +112,7 @@ public class FileStorageService {
                               contentType.equals("image/png") || 
                               contentType.equals("image/jpg") ||
                               contentType.equals("image/webp") ||
-                              contentType.startsWith("image/");  // More lenient check
+                              contentType.startsWith("image/");
         }
         
         // Check by file extension as fallback
@@ -123,10 +129,18 @@ public class FileStorageService {
         System.out.println("Valid extension: " + validExtension);
         
         // Accept if either content type or extension is valid, OR if file size > 0
-        boolean isValid = validContentType || validExtension || file.getSize() > 0;
+        boolean isValid = validContentType || validExtension || (file.getSize() > 0 && contentType != null);
         System.out.println("Final validation result: " + isValid);
         
         return isValid;
+    }
+    
+    // Thêm method để fix URL cũ
+    public String fixImageUrl(String imageUrl) {
+        if (imageUrl != null && imageUrl.contains("localhost")) {
+            return imageUrl.replace("http://localhost:8080", "https://zn8vnhrf-8080.asse.devtunnels.ms");
+        }
+        return imageUrl;
     }
     
     public void deleteFile(String fileUrl) {
@@ -138,7 +152,6 @@ public class FileStorageService {
             Path filePath = Paths.get(uploadDir, subfolder, filename);
             Files.deleteIfExists(filePath);
         } catch (IOException e) {
-            // Log error but don't throw exception
             System.err.println("Không thể xóa file: " + e.getMessage());
         }
     }
