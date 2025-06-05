@@ -124,6 +124,7 @@ public class UserService {
         tokenRepository.save(verificationToken);
         
         String verificationUrl = baseUrl + "/api/auth/verify?token=" + token;
+        // Call the local method instead of emailService
         emailService.sendVerificationEmail(email, verificationUrl);
         
         return savedUser;
@@ -186,6 +187,37 @@ public class UserService {
             UserProfile profile = new UserProfile(user.getId(), displayName);
             userProfileRepository.save(profile);
         }
+        
+        return user;
+    }
+
+    @Transactional
+    public User verifyUserAccount(String token) {
+        Optional<VerificationToken> tokenOptional = tokenRepository.findByToken(token);
+        
+        if (tokenOptional.isEmpty()) {
+            throw new RuntimeException("Invalid verification token");
+        }
+        
+        VerificationToken verificationToken = tokenOptional.get();
+        
+        // Check if token is expired
+        if (verificationToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Verification token has expired");
+        }
+        
+        // Get user and activate
+        Optional<User> userOptional = userRepository.findById(verificationToken.getUserId());
+        if (userOptional.isEmpty()) {
+            throw new RuntimeException("User not found");
+        }
+        
+        User user = userOptional.get();
+        user.setStatus(UserStatus.ACTIVE);
+        user = userRepository.save(user);
+        
+        // Delete the verification token
+        tokenRepository.deleteByUserId(user.getId());
         
         return user;
     }

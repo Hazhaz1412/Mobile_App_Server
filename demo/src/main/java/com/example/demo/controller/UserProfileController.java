@@ -63,7 +63,6 @@ public class UserProfileController {
                 return ResponseEntity.notFound().build();
             }
             
-            // The URL should be in the format baseUrl/uploads/filename
             String imageUrl = profile.getProfilePictureUrl();
             String filename = Paths.get(imageUrl).getFileName().toString();
             

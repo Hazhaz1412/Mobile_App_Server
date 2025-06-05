@@ -14,11 +14,14 @@ public class User {
     private String email;
     
     @Column(name = "password_hash")
-    private String passwordHash;  // NULL nếu chỉ đăng nhập Google
+    private String passwordHash;  
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserStatus status = UserStatus.PENDING;
+
+    @Column(name = "is_admin", nullable = false)
+    private Boolean isAdmin = false; // Thêm trường mới
     
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -46,6 +49,9 @@ public class User {
     
     public UserStatus getStatus() { return status; }
     public void setStatus(UserStatus status) { this.status = status; }
+    
+    public Boolean getIsAdmin() { return isAdmin; }
+    public void setIsAdmin(Boolean isAdmin) { this.isAdmin = isAdmin; }
     
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

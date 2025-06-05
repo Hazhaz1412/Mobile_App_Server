@@ -129,29 +129,216 @@ public class AuthController {
     }
 
     @GetMapping("/verify")
-    public ResponseEntity<ApiResponse> verifyAccount(@RequestParam String token) {
+    public ResponseEntity<String> verifyAccount(@RequestParam String token) {
         try {
-            Optional<VerificationToken> tokenOpt = tokenRepository.findByToken(token);
+            // Call the service method which will handle the transaction
+            User user = userService.verifyUserAccount(token);
             
-            if (tokenOpt.isEmpty()) {
-                return ResponseEntity.badRequest().body(new ApiResponse(false, "Invalid verification token"));
-            }
-            
-            VerificationToken verificationToken = tokenOpt.get();
-            
-            if (verificationToken.getExpiresAt().isBefore(LocalDateTime.now())) {
-                return ResponseEntity.badRequest().body(new ApiResponse(false, "Verification token has expired"));
-            }
-            
-            User user = userService.activateUser(verificationToken.getUserId());
-            tokenRepository.deleteByUserId(user.getId());
-            
-            return ResponseEntity.ok(new ApiResponse(true, "Account successfully verified", user.getId()));
+            // Return HTML success page for mobile app
+            String htmlResponse = """
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Xác thực thành công</title>
+                    <style>
+                        body {
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            margin: 0;
+                            padding: 20px;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            min-height: 100vh;
+                        }
+                        .container {
+                            background: white;
+                            padding: 40px;
+                            border-radius: 15px;
+                            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                            text-align: center;
+                            max-width: 400px;
+                            width: 100%;
+                            animation: slideIn 0.5s ease-out;
+                        }
+                        @keyframes slideIn {
+                            from { opacity: 0; transform: translateY(-20px); }
+                            to { opacity: 1; transform: translateY(0); }
+                        }
+                        .success-icon {
+                            color: #4CAF50;
+                            font-size: 80px;
+                            margin-bottom: 20px;
+                            animation: bounce 1s ease-in-out;
+                        }
+                        @keyframes bounce {
+                            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+                            40% { transform: translateY(-10px); }
+                            60% { transform: translateY(-5px); }
+                        }
+                        h1 {
+                            color: #333;
+                            margin-bottom: 15px;
+                            font-size: 28px;
+                        }
+                        p {
+                            color: #666;
+                            line-height: 1.6;
+                            margin-bottom: 30px;
+                            font-size: 16px;
+                        }
+                        .mobile-instruction {
+                            background: #f8f9fa;
+                            padding: 20px;
+                            border-radius: 8px;
+                            margin: 20px 0;
+                            border-left: 4px solid #4CAF50;
+                        }
+                        .countdown {
+                            color: #888;
+                            font-size: 14px;
+                            margin-top: 20px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="success-icon">✓</div>
+                        <h1>Xác thực thành công!</h1>
+                        <p>Tài khoản của bạn đã được kích hoạt thành công.</p>
+                        
+                        <div class="mobile-instruction">
+                            <strong>📱 Hướng dẫn tiếp theo:</strong><br>
+                            Hãy quay lại ứng dụng di động và đăng nhập với email đã đăng ký.
+                        </div>
+                        
+                        <div class="countdown">
+                            <span id="countdown">Tự động đóng sau 5 giây...</span>
+                        </div>
+                    </div>
+                    
+                    <script>
+                        let countdown = 5;
+                        const countdownElement = document.getElementById('countdown');
+                        
+                        const timer = setInterval(() => {
+                            countdown--;
+                            countdownElement.textContent = `Tự động đóng sau ${countdown} giây...`;
+                            
+                            if (countdown <= 0) {
+                                clearInterval(timer);
+                                countdownElement.textContent = 'Đang đóng...';
+                                
+                                // Try different methods to close/navigate
+                                if (window.ReactNativeWebView) {
+                                    window.ReactNativeWebView.postMessage('verification_success');
+                                }
+                                
+                                // For Android WebView
+                                if (window.Android) {
+                                    window.Android.onVerificationComplete();
+                                }
+                                
+                                // Try to close the window
+                                setTimeout(() => {
+                                    window.close();
+                                    // If close doesn't work, try to navigate back
+                                    if (window.history.length > 1) {
+                                        window.history.back();
+                                    } else {
+                                        // Last resort - show message
+                                        countdownElement.textContent = 'Vui lòng đóng tab này và quay lại ứng dụng';
+                                    }
+                                }, 1000);
+                            }
+                        }, 1000);
+                    </script>
+                </body>
+                </html>
+                """;
+    
+            return ResponseEntity.ok()
+                .header("Content-Type", "text/html; charset=UTF-8")
+                .body(htmlResponse);
+        
         } catch (Exception e) {
-            // Log the exception
             e.printStackTrace();
+            
+            // Return HTML error page
+            String errorHtml = """
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Xác thực thất bại</title>
+                    <style>
+                        body {
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+                            margin: 0;
+                            padding: 20px;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            min-height: 100vh;
+                        }
+                        .container {
+                            background: white;
+                            padding: 40px;
+                            border-radius: 15px;
+                            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                            text-align: center;
+                            max-width: 400px;
+                            width: 100%;
+                        }
+                        .error-icon {
+                            color: #f44336;
+                            font-size: 80px;
+                            margin-bottom: 20px;
+                        }
+                        h1 {
+                            color: #333;
+                            margin-bottom: 15px;
+                            font-size: 28px;
+                        }
+                        p {
+                            color: #666;
+                            line-height: 1.6;
+                            margin-bottom: 30px;
+                            font-size: 16px;
+                        }
+                        .error-details {
+                            background: #fff3f3;
+                            padding: 15px;
+                            border-radius: 8px;
+                            border-left: 4px solid #f44336;
+                            color: #d32f2f;
+                            font-size: 14px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="error-icon">✗</div>
+                        <h1>Xác thực thất bại!</h1>
+                        <p>Có lỗi xảy ra trong quá trình xác thực tài khoản.</p>
+                        <div class="error-details">
+                            """ + e.getMessage() + """
+                        </div>
+                        <p style="margin-top: 20px;">
+                            Vui lòng thử đăng ký lại hoặc liên hệ hỗ trợ.
+                        </p>
+                    </div>
+                </body>
+                </html>
+                """;
+    
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponse(false, "Error processing verification: " + e.getMessage()));
+                .header("Content-Type", "text/html; charset=UTF-8")
+                .body(errorHtml);
         }
     }
 

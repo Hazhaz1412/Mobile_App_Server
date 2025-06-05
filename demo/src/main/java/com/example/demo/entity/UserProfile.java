@@ -19,9 +19,11 @@ public class UserProfile {
     
     private String contactInfo;
     
-    private Double ratingAvg;
+    @Column(nullable = false)
+    private Double ratingAvg = 0.0; // Set default value
     
-    private Integer ratingCount;
+    @Column(nullable = false)
+    private Integer ratingCount = 0; // Set default value
     
     @OneToOne
     @JoinColumn(name = "userId", insertable = false, updatable = false)
@@ -30,10 +32,12 @@ public class UserProfile {
     // Default constructor
     public UserProfile() {}
     
-    // Add this constructor
+    // Constructor
     public UserProfile(Long userId, String displayName) {
         this.userId = userId;
         this.displayName = displayName;
+        this.ratingAvg = 0.0;     // Initialize with default
+        this.ratingCount = 0;     // Initialize with default
     }
     
     // Getters and setters
