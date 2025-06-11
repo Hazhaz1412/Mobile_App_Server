@@ -267,7 +267,7 @@ public class ListingController {
             @RequestParam(required = false) Long userId) {
         try {
             SearchCriteria criteria = new SearchCriteria();
-            criteria.setKeyword(keyword.trim().isEmpty() ? null : keyword.trim());
+            criteria.setKeyword(keyword != null && !keyword.trim().isEmpty() ? keyword.trim() : null);
             criteria.setCategoryId(categoryId);
             criteria.setConditionId(conditionId);
             criteria.setMinPrice(minPrice);
@@ -439,6 +439,25 @@ public class ListingController {
                 false,
                 "Lỗi cập nhật tương tác: " + e.getMessage()
             ));
+        }
+    }
+    
+    /**
+     * Home recommendations: categories with recommended listings for each
+     */
+    @GetMapping("/home-recommendations")
+    public ResponseEntity<ApiResponse> getHomeRecommendations(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) BigDecimal latitude,
+            @RequestParam(required = false) BigDecimal longitude,
+            @RequestParam(required = false, defaultValue = "10.0") Double maxDistance,
+            @RequestParam(required = false, defaultValue = "5") Integer listingsPerCategory
+    ) {
+        try {
+            List<CategoryWithListingsResponse> data = listingService.getHomeRecommendations(userId, latitude, longitude, maxDistance, listingsPerCategory);
+            return ResponseEntity.ok(new ApiResponse(true, "Lấy gợi ý trang chủ thành công!", data));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ApiResponse(false, "Lỗi lấy gợi ý trang chủ: " + e.getMessage()));
         }
     }
 }

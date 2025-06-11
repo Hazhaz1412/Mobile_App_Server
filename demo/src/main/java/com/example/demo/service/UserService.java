@@ -189,9 +189,7 @@ public class UserService {
         }
         
         return user;
-    }
-
-    @Transactional
+    }    @Transactional
     public User verifyUserAccount(String token) {
         Optional<VerificationToken> tokenOptional = tokenRepository.findByToken(token);
         
@@ -220,5 +218,13 @@ public class UserService {
         tokenRepository.deleteByUserId(user.getId());
         
         return user;
+    }
+    
+    /**
+     * Get a user by their ID
+     */
+    public User getUserById(Long userId) {
+        return userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User not found"));
     }
 }

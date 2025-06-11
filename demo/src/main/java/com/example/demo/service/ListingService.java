@@ -522,4 +522,70 @@ public class ListingService {
             .map(result -> (Long) result[0])
             .collect(Collectors.toList());
     }
+    
+    /**
+     * Get home recommendations: categories with recommended listings for each
+     */
+    public List<CategoryWithListingsResponse> getHomeRecommendations(Long userId, BigDecimal latitude, BigDecimal longitude, Double maxDistance, int listingsPerCategory) {
+        List<Category> categories = categoryRepository.findByIsActiveTrueOrderByName();
+        List<CategoryWithListingsResponse> result = new ArrayList<>();
+        for (Category category : categories) {
+            List<ListingResponse> listings;
+            // Ưu tiên: lịch sử user -> gần vị trí -> phổ biến
+            if (userId != null) {
+                List<Long> preferredCategories = getUserPreferredCategories(userId);
+                if (preferredCategories.contains(category.getId())) {
+                    Pageable pageable = PageRequest.of(0, listingsPerCategory);
+                    listings = listingRepository.findByPreferredCategories(
+                        List.of(category.getId()), ListingStatus.AVAILABLE, pageable
+                    ).map(this::convertToResponse).getContent();
+                } else {
+                    listings = new ArrayList<>();
+                }
+            } else {
+                listings = new ArrayList<>();
+            }
+            // Nếu chưa đủ, bổ sung sản phẩm gần vị trí
+            if (listings.size() < listingsPerCategory && latitude != null && longitude != null && maxDistance != null && maxDistance > 0) {
+                Pageable pageable = PageRequest.of(0, listingsPerCategory - listings.size());
+                List<ListingResponse> nearby = listingRepository.findNearbyListings(
+                    latitude, longitude, maxDistance, ListingStatus.AVAILABLE, pageable
+                ).stream()
+                 .filter(l -> l.getCategoryId().equals(category.getId()))
+                 .map(this::convertToResponse)
+                 .collect(Collectors.toList());
+                // Tránh trùng lặp
+                for (ListingResponse lr : nearby) {
+                    if (listings.stream().noneMatch(x -> x.getId().equals(lr.getId()))) {
+                        listings.add(lr);
+                    }
+                }
+            }
+            // Nếu vẫn chưa đủ, bổ sung sản phẩm phổ biến
+            if (listings.size() < listingsPerCategory) {
+                Pageable pageable = PageRequest.of(0, listingsPerCategory - listings.size());
+                List<ListingResponse> popular = listingRepository.findPopularListingsByCategory(
+                    category.getId(), ListingStatus.AVAILABLE, pageable
+                ).stream()
+                 .map(this::convertToResponse)
+                 .collect(Collectors.toList());
+                for (ListingResponse lr : popular) {
+                    if (listings.stream().noneMatch(x -> x.getId().equals(lr.getId()))) {
+                        listings.add(lr);
+                    }
+                }
+            }
+            // Chỉ trả về nếu có sản phẩm
+            if (!listings.isEmpty()) {
+                result.add(new CategoryWithListingsResponse(
+                    category.getId(),
+                    category.getName(),
+                    category.getDescription(),
+                    category.getIconUrl(),
+                    listings
+                ));
+            }
+        }
+        return result;
+    }
 }

@@ -1,14 +1,18 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.ApiResponse;
+import com.example.demo.dto.JwtAuthResponse;
 import com.example.demo.dto.LoginRequest;
 import com.example.demo.dto.PasswordResetRequest;
 import com.example.demo.dto.PasswordUpdateRequest;
+import com.example.demo.dto.RefreshTokenRequest;
 import com.example.demo.dto.RegisterRequest;
 import com.example.demo.dto.GoogleAuthRequest;
 import com.example.demo.entity.User;
 import com.example.demo.entity.VerificationToken;
 import com.example.demo.repository.VerificationTokenRepository;
+import com.example.demo.security.JwtTokenProvider;
+import com.example.demo.security.RefreshTokenService;
 import com.example.demo.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,12 +28,17 @@ import java.util.Optional;
 @RequestMapping("/api/auth")
 @Validated
 public class AuthController {
-    
-    @Autowired
+      @Autowired
     private UserService userService;
     
     @Autowired
     private VerificationTokenRepository tokenRepository;
+    
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+    
+    @Autowired
+    private RefreshTokenService refreshTokenService;
     
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse> forgotPassword(@Valid @RequestBody PasswordResetRequest request) {
@@ -96,10 +105,17 @@ public class AuthController {
                 request.getPassword()
             );
             
+            // Generate JWT tokens
+            String accessToken = jwtTokenProvider.generateAccessToken(user.getId());
+            String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+            
+            // Create response with tokens
+            JwtAuthResponse authResponse = new JwtAuthResponse(accessToken, refreshToken);
+            
             return ResponseEntity.ok(new ApiResponse(
                 true, 
-                "Đăng nhập thành công!", 
-                user.getId()
+                "Đăng nhập thành công!",
+                authResponse
             ));
             
         } catch (RuntimeException e) {
@@ -107,6 +123,64 @@ public class AuthController {
                 false, 
                 e.getMessage()
             ));
+        }
+    }
+      @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+        try {
+            String refreshToken = request.getRefreshToken();
+            
+            // Check if token is invalidated (due to logout)
+            if (refreshTokenService.isTokenInvalidated(refreshToken)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    new ApiResponse(false, "Refresh token has been invalidated", null)
+                );
+            }
+            
+            // Validate refresh token
+            if (!jwtTokenProvider.validateToken(refreshToken)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    new ApiResponse(false, "Invalid refresh token", null)
+                );
+            }
+            
+            // Get user ID from token
+            Long userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
+            
+            // Generate new tokens
+            String newAccessToken = jwtTokenProvider.generateAccessToken(userId);
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
+            
+            // Create response
+            JwtAuthResponse authResponse = new JwtAuthResponse(newAccessToken, newRefreshToken);
+            
+            return ResponseEntity.ok(new ApiResponse(
+                true,
+                "Token refreshed successfully",
+                authResponse
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                new ApiResponse(false, "Failed to refresh token: " + e.getMessage(), null)
+            );
+        }
+    }
+    
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse> logout(@RequestBody RefreshTokenRequest request) {
+        try {
+            // Invalidate the refresh token
+            refreshTokenService.invalidateToken(request.getRefreshToken());
+            
+            return ResponseEntity.ok(new ApiResponse(
+                true,
+                "Logged out successfully",
+                null
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                new ApiResponse(false, "Failed to logout: " + e.getMessage(), null)
+            );
         }
     }
     
@@ -351,7 +425,14 @@ public class AuthController {
                 request.getDisplayName()
             );
             
-            return ResponseEntity.ok(new ApiResponse(true, "Google login successful", user.getId()));
+            // Generate JWT tokens
+            String accessToken = jwtTokenProvider.generateAccessToken(user.getId());
+            String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+            
+            // Create response with tokens
+            JwtAuthResponse authResponse = new JwtAuthResponse(accessToken, refreshToken);
+            
+            return ResponseEntity.ok(new ApiResponse(true, "Google login successful", authResponse));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new ApiResponse(false, e.getMessage(), null));
         }

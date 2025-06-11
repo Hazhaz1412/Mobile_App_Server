@@ -25,7 +25,7 @@ public interface ListingRepository extends JpaRepository<Listing, Long> {
     
     // Advanced search with multiple criteria
     @Query("SELECT l FROM Listing l WHERE l.status = :status " +
-           "AND (:keyword IS NULL OR :keyword = '' OR " +
+           "AND (:keyword IS NULL OR " +
            "    LOWER(l.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "    LOWER(l.description) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
            "AND (:categoryId IS NULL OR l.categoryId = :categoryId) " +
@@ -44,7 +44,7 @@ public interface ListingRepository extends JpaRepository<Listing, Long> {
     
     // Search by distance using Haversine formula
     @Query("SELECT l FROM Listing l WHERE l.status = :status " +
-           "AND (:keyword IS NULL OR :keyword = '' OR " +
+           "AND (:keyword IS NULL OR " +
            "    LOWER(l.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "    LOWER(l.description) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
            "AND (:categoryId IS NULL OR l.categoryId = :categoryId) " +

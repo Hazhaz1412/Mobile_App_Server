@@ -155,4 +155,11 @@ public class FileStorageService {
             System.err.println("Không thể xóa file: " + e.getMessage());
         }
     }
+    
+    /**
+     * Upload a chat image
+     */
+    public String uploadChatImage(MultipartFile file) {
+        return uploadImage(file, "chat-images");
+    }
 }
