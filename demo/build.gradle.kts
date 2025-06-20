@@ -30,9 +30,16 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-mail")  
 	implementation("org.springframework.boot:spring-boot-starter-security")
 	implementation("org.springframework.boot:spring-boot-starter-websocket")
+	implementation("org.springframework.boot:spring-boot-starter-thymeleaf") // For HTML templates
 	implementation("io.jsonwebtoken:jjwt-api:0.11.5")
 	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.11.5")
-	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.11.5")
+	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.11.5")	// Payment processing dependencies
+	implementation("org.springframework.boot:spring-boot-starter-webflux") // For WebClient
+	implementation("com.fasterxml.jackson.core:jackson-databind")
+	implementation("commons-codec:commons-codec:1.16.0")
+	
+	// Stripe payment integration
+	implementation("com.stripe:stripe-java:24.16.0")
 
 	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")

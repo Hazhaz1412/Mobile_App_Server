@@ -21,10 +21,11 @@ public class CreateListingRequest {
     
     @NotNull(message = "Tình trạng không được để trống")
     private Long conditionId;
-    
-    private String locationText;
+      private String locationText;
     private BigDecimal latitude;
     private BigDecimal longitude;
+    
+    private Boolean isNegotiable = false; // Allow price negotiation
     
     private List<String> tags;
     
@@ -52,9 +53,11 @@ public class CreateListingRequest {
     
     public BigDecimal getLatitude() { return latitude; }
     public void setLatitude(BigDecimal latitude) { this.latitude = latitude; }
-    
-    public BigDecimal getLongitude() { return longitude; }
+      public BigDecimal getLongitude() { return longitude; }
     public void setLongitude(BigDecimal longitude) { this.longitude = longitude; }
+    
+    public Boolean getIsNegotiable() { return isNegotiable; }
+    public void setIsNegotiable(Boolean isNegotiable) { this.isNegotiable = isNegotiable; }
     
     public List<String> getTags() { return tags; }
     public void setTags(List<String> tags) { this.tags = tags; }

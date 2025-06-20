@@ -12,13 +12,13 @@ public class UpdateListingRequest {
     
     @DecimalMin(value = "0.0", inclusive = false, message = "Giá phải lớn hơn 0")
     private BigDecimal price;
-    
-    private Long categoryId;
+      private Long categoryId;
     private Long conditionId;
     private String locationText;
     private BigDecimal latitude;
     private BigDecimal longitude;
     private String status;
+    private Boolean isNegotiable;
     private List<String> tags;
     
     // Constructors
@@ -48,9 +48,11 @@ public class UpdateListingRequest {
     
     public BigDecimal getLongitude() { return longitude; }
     public void setLongitude(BigDecimal longitude) { this.longitude = longitude; }
-    
-    public String getStatus() { return status; }
+      public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    
+    public Boolean getIsNegotiable() { return isNegotiable; }
+    public void setIsNegotiable(Boolean isNegotiable) { this.isNegotiable = isNegotiable; }
     
     public List<String> getTags() { return tags; }
     public void setTags(List<String> tags) { this.tags = tags; }

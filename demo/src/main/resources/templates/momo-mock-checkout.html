@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoMo Mock Checkout</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 50px auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #ae2070;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .logo {
+            width: 100px;
+            margin-bottom: 10px;
+        }
+        
+        .content {
+            padding: 20px;
+        }
+        
+        .order-info {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .order-info p {
+            margin: 8px 0;
+        }
+        
+        .payment-amount {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ae2070;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+        
+        .btn-success {
+            background: #ae2070;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #95085b;
+        }
+        
+        .btn-cancel {
+            background: #e0e0e0;
+            color: #333;
+        }
+        
+        .btn-cancel:hover {
+            background: #d0d0d0;
+        }
+        
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .qr-code img {
+            max-width: 200px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .instruction {
+            font-size: 14px;
+            background: #fff9e5;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 15px;
+            font-size: 12px;
+            color: #777;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png" alt="MoMo Logo" class="logo">
+            <h1>Thanh Toán MoMo (Giả Lập)</h1>
+        </div>
+        
+        <div class="content">
+            <div class="instruction">
+                <strong>🚨 Lưu ý:</strong> Đây là trang giả lập MoMo cho mục đích thử nghiệm. Không có giao dịch thực nào được thực hiện.
+            </div>
+            
+            <div class="order-info">
+                <p><strong>Mã đơn hàng:</strong> <span th:text="${orderId}">TXN123456</span></p>
+                <p><strong>Mô tả:</strong> <span th:text="${orderInfo}">Thanh toán đơn hàng</span></p>
+                <p><strong>Người nhận:</strong> <span th:text="${partnerName}">TradeUp</span></p>
+            </div>
+            
+            <div class="payment-amount">
+                <span th:text="${#numbers.formatDecimal(amount, 0, 'COMMA', 0, 'POINT')}">100,000</span> VNĐ
+            </div>
+            
+            <div class="qr-code">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=momo://pay?phone=0969123456&amount=100000" alt="QR Code">
+                <p>Quét mã QR để thanh toán</p>
+            </div>
+            
+            <form method="POST" th:action="@{/momo/mock-process}">
+                <input type="hidden" name="orderId" th:value="${orderId}">
+                <input type="hidden" name="amount" th:value="${amount}">
+                <div class="buttons">
+                    <button type="submit" name="status" value="success" class="btn btn-success">✓ Xác nhận thanh toán</button>
+                    <button type="submit" name="status" value="cancel" class="btn btn-cancel">✗ Hủy thanh toán</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="footer">
+            Trang này chỉ dành cho mục đích thử nghiệm. © 2024 TradeUp
+        </div>
+    </div>
+</body>
+</html>

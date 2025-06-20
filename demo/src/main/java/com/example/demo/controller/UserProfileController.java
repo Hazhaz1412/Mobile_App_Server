@@ -16,6 +16,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import com.example.demo.dto.UserProfileResponse;
 import java.math.BigDecimal;
 import java.nio.file.Paths;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
@@ -73,14 +74,22 @@ public class UserProfileController {
             e.printStackTrace();
             return ResponseEntity.notFound().build();
         }
-    }
-
-    @GetMapping("/{userId}/profile")
+    }    @GetMapping("/{userId}/profile")
     public ResponseEntity<UserProfileResponse> getUserProfile(@PathVariable Long userId) {
         try {
             UserProfile profile = userProfileService.getUserProfile(userId);
+            if (profile == null) {
+                return ResponseEntity.notFound().build();
+            }
             UserProfileResponse response = convertToResponse(profile);
             return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            // Handle "User profile not found" specifically
+            if (e.getMessage().contains("User profile not found")) {
+                return ResponseEntity.notFound().build();
+            }
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -129,6 +138,33 @@ public class UserProfileController {
                 false,
                 "Error updating profile: " + e.getMessage()
             ));
+        }
+    }
+
+    // Debug endpoint to list all user profiles
+    @GetMapping("/debug/all-profiles")
+    public ResponseEntity<?> getAllUserProfiles() {
+        try {
+            return ResponseEntity.ok(userProfileService.getAllUserProfiles());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error: " + e.getMessage());
+        }
+    }    // Fix endpoint to create missing user profiles
+    @PostMapping("/fix/create-missing-profiles")
+    public ResponseEntity<?> createMissingUserProfiles() {
+        try {
+            int created = userProfileService.createMissingUserProfiles();
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Created " + created + " missing user profiles",
+                "created_count", created
+            ));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("success", false, "error", e.getMessage()));
         }
     }
 }

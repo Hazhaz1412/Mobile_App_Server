@@ -22,6 +22,9 @@ public class UserProfileService {
     @Value("${app.base-url}")
     private String baseUrl;
 
+    @Autowired
+    private com.example.demo.repository.UserRepository userRepository;
+
     @Transactional
     public UserProfile updateProfilePicture(Long userId, MultipartFile file) {
         UserProfile profile = userProfileRepository.findById(userId)
@@ -41,10 +44,9 @@ public class UserProfileService {
         profile.setProfilePictureUrl(imageUrl);
         return userProfileRepository.save(profile);
     }
-    
-    public UserProfile getUserProfile(Long userId) {
-        return userProfileRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User profile not found"));
+      public UserProfile getUserProfile(Long userId) {
+        Optional<UserProfile> profile = userProfileRepository.findById(userId);
+        return profile.orElse(null);
     }
     
     @Transactional
@@ -67,5 +69,35 @@ public class UserProfileService {
         return userProfileRepository.save(profile);
     }
     
-    
+    public java.util.List<UserProfile> getAllUserProfiles() {
+        return userProfileRepository.findAll();
+    }    // Simple method để tạo user profiles chính
+    @Transactional
+    public int createMissingUserProfiles() {
+        int created = 0;
+        // Tạo profiles cho các tài khoản chính
+        Long[] mainUserIds = {9L, 10L, 21L, 22L, 23L};
+        
+        for (Long userId : mainUserIds) {
+            if (!userProfileRepository.existsByUserId(userId)) {
+                UserProfile profile = new UserProfile();
+                profile.setUserId(userId);
+                profile.setDisplayName("Test User " + userId);
+                profile.setBio("");
+                profile.setContactInfo("");
+                profile.setRatingAvg(0.0);
+                profile.setRatingCount(0);
+                profile.setProfilePictureUrl(null);
+                
+                try {
+                    userProfileRepository.save(profile);
+                    created++;
+                } catch (Exception e) {
+                    System.err.println("Failed to create profile for user " + userId + ": " + e.getMessage());
+                }
+            }
+        }
+        
+        return created;
+    }
 }

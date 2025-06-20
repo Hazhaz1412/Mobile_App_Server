@@ -73,10 +73,10 @@ public class ListingService {
         listing.setDescription(request.getDescription());
         listing.setPrice(request.getPrice());
         listing.setCategoryId(request.getCategoryId());
-        listing.setConditionId(request.getConditionId());
-        listing.setLocationText(request.getLocationText());
+        listing.setConditionId(request.getConditionId());        listing.setLocationText(request.getLocationText());
         listing.setLatitude(request.getLatitude());
         listing.setLongitude(request.getLongitude());
+        listing.setIsNegotiable(request.getIsNegotiable() != null ? request.getIsNegotiable() : false);
         listing.setStatus(ListingStatus.AVAILABLE);
         
         Listing savedListing = listingRepository.save(listing);
@@ -176,12 +176,14 @@ public class ListingService {
             listing.setLongitude(request.getLongitude());
         }
         if (request.getStatus() != null) {
-            try {
-                ListingStatus status = ListingStatus.valueOf(request.getStatus().toUpperCase());
+            try {                ListingStatus status = ListingStatus.valueOf(request.getStatus().toUpperCase());
                 listing.setStatus(status);
             } catch (IllegalArgumentException e) {
                 throw new RuntimeException("Status không hợp lệ!");
             }
+        }
+        if (request.getIsNegotiable() != null) {
+            listing.setIsNegotiable(request.getIsNegotiable());
         }
         
         Listing savedListing = listingRepository.save(listing);
@@ -420,10 +422,10 @@ public class ListingService {
         response.setPrice(listing.getPrice());
         response.setCategoryId(listing.getCategoryId());
         response.setConditionId(listing.getConditionId());
-        response.setLocationText(listing.getLocationText());
-        response.setLatitude(listing.getLatitude());
+        response.setLocationText(listing.getLocationText());        response.setLatitude(listing.getLatitude());
         response.setLongitude(listing.getLongitude());
         response.setStatus(listing.getStatus());
+        response.setIsNegotiable(listing.getIsNegotiable());
         response.setViewCount(listing.getViewCount());
         response.setInteractionCount(listing.getInteractionCount());
         response.setCreatedAt(listing.getCreatedAt());

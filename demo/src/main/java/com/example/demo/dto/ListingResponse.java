@@ -16,10 +16,10 @@ public class ListingResponse {
     private String categoryName;
     private Long conditionId;
     private String conditionName;
-    private String locationText;
-    private BigDecimal latitude;
+    private String locationText;    private BigDecimal latitude;
     private BigDecimal longitude;
     private ListingStatus status;
+    private Boolean isNegotiable;
     private Integer viewCount;
     private Integer interactionCount;
     private LocalDateTime createdAt;
@@ -70,9 +70,11 @@ public class ListingResponse {
     
     public BigDecimal getLongitude() { return longitude; }
     public void setLongitude(BigDecimal longitude) { this.longitude = longitude; }
-    
-    public ListingStatus getStatus() { return status; }
+      public ListingStatus getStatus() { return status; }
     public void setStatus(ListingStatus status) { this.status = status; }
+    
+    public Boolean getIsNegotiable() { return isNegotiable; }
+    public void setIsNegotiable(Boolean isNegotiable) { this.isNegotiable = isNegotiable; }
     
     public Integer getViewCount() { return viewCount; }
     public void setViewCount(Integer viewCount) { this.viewCount = viewCount; }

@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradeUp - Stripe Checkout</title>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .checkout-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .logo {
+            color: #635bff;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .mode-badge {
+            background: #00d4aa;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        
+        .mock-badge {
+            background: #ff6b6b;
+        }
+        
+        .payment-summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .summary-row:last-child {
+            margin-bottom: 0;
+            font-weight: bold;
+            font-size: 18px;
+            color: #635bff;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #32325d;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e6ebf1;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #635bff;
+            box-shadow: 0 0 0 3px rgba(99, 91, 255, 0.1);
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        /* Stripe Elements styling */
+        .StripeElement {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e6ebf1;
+            border-radius: 6px;
+            background: white;
+            transition: border-color 0.2s;
+        }
+        
+        .StripeElement:focus {
+            border-color: #635bff;
+            box-shadow: 0 0 0 3px rgba(99, 91, 255, 0.1);
+        }
+        
+        .StripeElement--invalid {
+            border-color: #e25950;
+        }
+        
+        .card-errors {
+            color: #e25950;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        
+        .pay-button {
+            width: 100%;
+            background: #635bff;
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 20px;
+        }
+        
+        .pay-button:hover {
+            background: #5a52e8;
+        }
+        
+        .pay-button:disabled {
+            background: #aab7c4;
+            cursor: not-allowed;
+        }
+        
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .security-info {
+            background: #f6f9fc;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #6b7c93;
+            text-align: center;
+        }
+        
+        .security-icons {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .security-icon {
+            width: 30px;
+            height: 20px;
+            background: #e6ebf1;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: #6b7c93;
+        }
+        
+        .back-button {
+            background: #f6f9fc;
+            color: #6b7c93;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: background-color 0.2s;
+        }
+        
+        .back-button:hover {
+            background: #e6ebf1;
+        }
+        
+        /* Mock mode specific styles */
+        .mock-form {
+            display: none;
+        }
+        
+        .mock-form.active {
+            display: block;
+        }
+        
+        .real-form {
+            display: none;
+        }
+        
+        .real-form.active {
+            display: block;
+        }
+        
+        .mode-switcher {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .mode-switch {
+            background: #f6f9fc;
+            border-radius: 20px;
+            padding: 4px;
+            display: inline-block;
+        }
+        
+        .mode-option {
+            padding: 8px 16px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .mode-option.active {
+            background: #635bff;
+            color: white;
+        }
+        
+        .test-cards {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        
+        .test-card {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        
+        .test-card:hover {
+            background: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="checkout-container">
+        <div class="logo">🛒 TradeUp</div>
+        <div class="mode-badge" id="modeBadge">REAL MODE</div>
+        
+        <!-- Payment Summary -->
+        <div class="payment-summary">            <div class="summary-row">
+                <span>Sản phẩm:</span>
+                <span id="productName">{{PRODUCT_NAME}}</span>
+            </div>
+            <div class="summary-row">
+                <span>Người bán:</span>
+                <span id="sellerName">{{SELLER_NAME}}</span>
+            </div>
+            <div class="summary-row">
+                <span>Phí xử lý:</span>
+                <span>Miễn phí</span>
+            </div>
+            <div class="summary-row">
+                <span>Tổng cộng:</span>
+                <span id="totalAmount">{{AMOUNT}} VND</span>
+            </div>
+        </div>
+        
+        <!-- Mode Switcher -->
+        <div class="mode-switcher">
+            <div class="mode-switch">
+                <span class="mode-option active" onclick="switchMode('real')">Real Mode</span>
+                <span class="mode-option" onclick="switchMode('mock')">Mock Mode</span>
+            </div>
+        </div>
+        
+        <!-- Real Stripe Form -->
+        <form id="payment-form" class="real-form active">
+            <div class="form-group">
+                <label class="form-label" for="email">Email</label>
+                <input type="email" id="email" class="form-input" placeholder="customer@example.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="cardholder-name">Tên chủ thẻ</label>
+                <input type="text" id="cardholder-name" class="form-input" placeholder="Nguyễn Văn A" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Thông tin thẻ</label>
+                <div id="card-element">
+                    <!-- Stripe Elements will create form elements here -->
+                </div>
+                <div id="card-errors" role="alert" class="card-errors"></div>
+            </div>
+            
+            <button type="submit" id="submit-button" class="pay-button">
+                <span class="loading-spinner" id="loading-spinner"></span>
+                <span id="button-text">Thanh toán ngay</span>
+            </button>
+            
+            <!-- Test Cards Info -->
+            <div class="test-cards">
+                <strong>Thẻ test (chỉ dùng để thử):</strong>
+                <div class="test-card" onclick="fillTestCard('4242424242424242')">
+                    <span>Visa: 4242 4242 4242 4242</span>
+                    <span>Thành công</span>
+                </div>
+                <div class="test-card" onclick="fillTestCard('4000000000000002')">
+                    <span>Visa: 4000 0000 0000 0002</span>
+                    <span>Thất bại</span>
+                </div>
+                <div class="test-card" onclick="fillTestCard('4000000000009995')">
+                    <span>Visa: 4000 0000 0000 9995</span>
+                    <span>Không đủ tiền</span>
+                </div>
+                <small>Hạn sử dụng: bất kỳ tháng/năm tương lai, CVV: bất kỳ 3 số</small>
+            </div>
+        </form>
+        
+        <!-- Mock Form -->
+        <div class="mock-form" id="mockForm">
+            <p style="margin-bottom: 20px; color: #6b7c93; text-align: center;">
+                Chế độ mock - không cần nhập thẻ thật
+            </p>
+            
+            <button type="button" class="pay-button" onclick="mockPayment('success')">
+                ✅ Thanh toán thành công (Mock)
+            </button>
+            
+            <button type="button" class="pay-button" onclick="mockPayment('failed')" 
+                    style="background: #e25950; margin-top: 10px;">
+                ❌ Thanh toán thất bại (Mock)
+            </button>
+        </div>
+        
+        <div class="security-info">
+            <div>🔒 Thông tin thanh toán được bảo mật bởi Stripe</div>
+            <div class="security-icons">
+                <div class="security-icon">SSL</div>
+                <div class="security-icon">PCI</div>
+                <div class="security-icon">256</div>
+            </div>
+        </div>
+        
+        <button type="button" class="back-button" onclick="goBack()">
+            ← Quay lại
+        </button>
+    </div>    <script>
+        // Configuration - Updated with real Stripe keys
+        const STRIPE_PUBLISHABLE_KEY = 'pk_test_51RbgMTGbhWLo4mQgxfXsEaQXYCtXOvtNeBqQmQG59XDZQ31OmS4bVD1aLkr8IitV6jxUZt4fy2U4lV3mr46cDwLx005ubVzFg8';
+        const API_BASE_URL = window.location.origin;
+        
+        // Initialize Stripe
+        let stripe;
+        let elements;
+        let card;
+        let currentMode = 'real';
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPaymentInfo();
+            initializeStripe();
+        });
+        
+        function initializeStripe() {
+            if (currentMode === 'real') {
+                stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+                elements = stripe.elements();
+                
+                // Create card element
+                card = elements.create('card', {
+                    style: {
+                        base: {
+                            fontSize: '16px',
+                            color: '#424770',
+                            '::placeholder': {
+                                color: '#aab7c4',
+                            },
+                        },
+                        invalid: {
+                            color: '#e25950',
+                        },
+                    },
+                });
+                
+                card.mount('#card-element');
+                
+                // Handle real-time validation errors from the card Element
+                card.on('change', function(event) {
+                    const displayError = document.getElementById('card-errors');
+                    if (event.error) {
+                        displayError.textContent = event.error.message;
+                    } else {
+                        displayError.textContent = '';
+                    }
+                });
+                
+                // Handle form submission
+                const form = document.getElementById('payment-form');
+                form.addEventListener('submit', handleSubmit);
+            }
+        }
+        
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            // Update badges
+            const modeBadge = document.getElementById('modeBadge');
+            const modeOptions = document.querySelectorAll('.mode-option');
+            
+            modeOptions.forEach(option => option.classList.remove('active'));
+            
+            if (mode === 'real') {
+                modeBadge.textContent = 'REAL MODE';
+                modeBadge.className = 'mode-badge';
+                document.querySelector('.real-form').classList.add('active');
+                document.querySelector('.mock-form').classList.remove('active');
+                modeOptions[0].classList.add('active');
+                initializeStripe();
+            } else {
+                modeBadge.textContent = 'MOCK MODE';
+                modeBadge.className = 'mode-badge mock-badge';
+                document.querySelector('.real-form').classList.remove('active');
+                document.querySelector('.mock-form').classList.add('active');
+                modeOptions[1].classList.add('active');
+            }
+        }
+        
+        function loadPaymentInfo() {
+            // Get payment info from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const paymentId = urlParams.get('paymentId');
+            const amount = urlParams.get('amount');
+            const productName = urlParams.get('productName');
+            const sellerName = urlParams.get('sellerName');
+              if (productName) document.getElementById('productName').textContent = productName;
+            if (sellerName) document.getElementById('sellerName').textContent = sellerName;
+            if (amount) {
+                // Show both VND original and USD equivalent
+                const vndAmount = parseInt(amount);
+                const usdAmount = (vndAmount / 24000).toFixed(2);
+                document.getElementById('totalAmount').innerHTML = 
+                    new Intl.NumberFormat('vi-VN').format(vndAmount) + ' VND<br>' + 
+                    '<small style="color: #666; font-size: 0.9em;">(≈ $' + usdAmount + ' USD sẽ được thanh toán qua Stripe)</small>';
+            }
+        }
+        
+        async function handleSubmit(event) {
+            event.preventDefault();
+            
+            const submitButton = document.getElementById('submit-button');
+            const buttonText = document.getElementById('button-text');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            
+            // Disable button and show spinner
+            submitButton.disabled = true;
+            loadingSpinner.style.display = 'inline-block';
+            buttonText.textContent = 'Đang xử lý...';
+            
+            try {
+                // Get form data
+                const email = document.getElementById('email').value;
+                const cardholderName = document.getElementById('cardholder-name').value;
+                
+                // Create payment method
+                const {error, paymentMethod} = await stripe.createPaymentMethod({
+                    type: 'card',
+                    card: card,
+                    billing_details: {
+                        name: cardholderName,
+                        email: email,
+                    },
+                });
+                
+                if (error) {
+                    showError(error.message);
+                } else {
+                    // Send payment method to server
+                    await processPayment(paymentMethod.id);
+                }
+            } catch (err) {
+                showError('Có lỗi xảy ra khi xử lý thanh toán: ' + err.message);
+            }
+            
+            // Re-enable button
+            submitButton.disabled = false;
+            loadingSpinner.style.display = 'none';
+            buttonText.textContent = 'Thanh toán ngay';
+        }
+          async function processPayment(paymentMethodId) {
+            try {
+                // Get paymentId from URL path (e.g., /checkout/78)
+                const pathParts = window.location.pathname.split('/');
+                const paymentId = pathParts[pathParts.length - 1]; // Last part of path
+                
+                console.log('Processing payment with ID:', paymentId, 'and method:', paymentMethodId);
+                
+                const response = await fetch(`${API_BASE_URL}/api/v1/payments/stripe/confirm`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        payment_method: paymentMethodId,
+                        payment_id: paymentId
+                    }),
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Payment succeeded
+                    window.location.href = `${API_BASE_URL}/api/v1/payments/stripe/success?paymentId=${paymentId}`;
+                } else {
+                    showError(result.message || 'Thanh toán thất bại');
+                }
+            } catch (err) {
+                console.error('Payment processing error:', err);
+                showError('Lỗi kết nối: ' + err.message);
+            }
+        }
+          function mockPayment(result) {
+            // Get paymentId from URL path (e.g., /checkout/78)
+            const pathParts = window.location.pathname.split('/');
+            const paymentId = pathParts[pathParts.length - 1]; // Last part of path
+            
+            if (result === 'success') {
+                window.location.href = `${API_BASE_URL}/api/v1/payments/stripe/success?paymentId=${paymentId}`;
+            } else {
+                window.location.href = `${API_BASE_URL}/api/v1/payments/stripe/cancel?paymentId=${paymentId}`;
+            }
+        }
+        
+        function fillTestCard(cardNumber) {
+            if (currentMode === 'real' && card) {
+                // Note: Stripe Elements doesn't allow programmatic filling
+                // Users need to manually enter test card numbers
+                alert(`Hãy nhập số thẻ: ${cardNumber}\nHạn sử dụng: 12/25\nCVV: 123`);
+            }
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('card-errors');
+            errorDiv.textContent = message;
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                errorDiv.textContent = '';
+            }, 5000);
+        }
+        
+        function goBack() {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.close();
+            }
+        }
+    </script>
+</body>
+</html>

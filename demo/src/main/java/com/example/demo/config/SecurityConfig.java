@@ -30,14 +30,23 @@ public class SecurityConfig {
                 
                 // Allow OPTIONS requests for CORS
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                
-                // Public API endpoints
+                  // Public API endpoints
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/users/**").permitAll()
-                .requestMatchers("/api/profiles/**").permitAll()
-                .requestMatchers("/api/listings/**").permitAll()
+                .requestMatchers("/api/profiles/**").permitAll()                .requestMatchers("/api/listings/**").permitAll()
                 .requestMatchers("/api/conditions/**").permitAll()
                 .requestMatchers("/api/categories/**").permitAll()
+                .requestMatchers("/api/offers/**").permitAll()
+                .requestMatchers("/api/transactions/**").permitAll()
+                // Payment API endpoints (for testing)
+                .requestMatchers("/api/v1/payments/**").permitAll()
+                .requestMatchers("/api/v1/payment-methods/**").permitAll()
+                .requestMatchers("/api/v1/escrow/**").permitAll()
+                .requestMatchers("/api/v1/stripe/**").permitAll()
+                .requestMatchers("/stripe/**").permitAll() // Mock checkout page
+                .requestMatchers("/api/v1/visa/**").permitAll()
+                .requestMatchers("/visa/**").permitAll() // Visa callback endpoints
+                .requestMatchers("/api/v1/test/**").permitAll()
                 
                 .anyRequest().authenticated()
             );

@@ -45,6 +45,9 @@ public class Listing {
     @Column(nullable = false)
     private ListingStatus status = ListingStatus.AVAILABLE;
     
+    @Column(name = "is_negotiable", nullable = false)
+    private Boolean isNegotiable = false;
+    
     @Column(name = "view_count", nullable = false)
     private Integer viewCount = 0;
     
@@ -109,9 +112,11 @@ public class Listing {
     
     public BigDecimal getLongitude() { return longitude; }
     public void setLongitude(BigDecimal longitude) { this.longitude = longitude; }
-    
-    public ListingStatus getStatus() { return status; }
+      public ListingStatus getStatus() { return status; }
     public void setStatus(ListingStatus status) { this.status = status; }
+    
+    public Boolean getIsNegotiable() { return isNegotiable; }
+    public void setIsNegotiable(Boolean isNegotiable) { this.isNegotiable = isNegotiable; }
     
     public Integer getViewCount() { return viewCount; }
     public void setViewCount(Integer viewCount) { this.viewCount = viewCount; }
