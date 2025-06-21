@@ -66,4 +66,10 @@ public interface OfferRepository extends JpaRepository<Offer, Long> {
     // Get highest offer for a listing
     @Query("SELECT MAX(o.offerAmount) FROM Offer o WHERE o.listingId = :listingId")
     Double getHighestOfferAmountByListing(@Param("listingId") Long listingId);
+      // Check if listing has completed offer (already sold)
+    @Query("SELECT COUNT(o) > 0 FROM Offer o WHERE o.listingId = :listingId AND o.status = 'COMPLETED'")
+    boolean existsCompletedOfferByListingId(@Param("listingId") Long listingId);
+    
+    // Find offers for listing excluding specific status
+    Page<Offer> findByListingIdAndStatusNotOrderByCreatedAtDesc(Long listingId, OfferStatus status, Pageable pageable);
 }

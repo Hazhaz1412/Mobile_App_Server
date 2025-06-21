@@ -9,12 +9,16 @@ public class Rating {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    
-    @Column(name = "transaction_id", nullable = false)
+    private Long id;    @Column(name = "transaction_id", nullable = false)
     private Long transactionId;
-      @Column(name = "rater_id", nullable = false)
-    private Long raterUserId; // Người đánh giá    @Column(name = "rated_user_id", nullable = false)
+    
+    @Column(name = "rater_id", nullable = false)
+    private Long raterId; // ID của rating record
+    
+    @Column(name = "rater_user_id", nullable = false)
+    private Long raterUserId; // Người đánh giá
+    
+    @Column(name = "rated_user_id", nullable = false)
     private Long ratedUserId; // Người được đánh giá
     
     @Column(name = "listing_id", nullable = false)
@@ -45,9 +49,9 @@ public class Rating {
     
     // Constructors
     public Rating() {}
-    
-    public Rating(Long transactionId, Long raterUserId, Long ratedUserId, Long listingId, Integer rating, String comment) {
+      public Rating(Long transactionId, Long raterUserId, Long ratedUserId, Long listingId, Integer rating, String comment) {
         this.transactionId = transactionId;
+        this.raterId = raterUserId; // Set raterId same as raterUserId for now
         this.raterUserId = raterUserId;
         this.ratedUserId = ratedUserId;
         this.listingId = listingId;
@@ -67,9 +71,16 @@ public class Rating {
     public Long getTransactionId() {
         return transactionId;
     }
-    
-    public void setTransactionId(Long transactionId) {
+      public void setTransactionId(Long transactionId) {
         this.transactionId = transactionId;
+    }
+    
+    public Long getRaterId() {
+        return raterId;
+    }
+    
+    public void setRaterId(Long raterId) {
+        this.raterId = raterId;
     }
     
     public Long getRaterUserId() {

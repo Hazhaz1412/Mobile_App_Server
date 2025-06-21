@@ -39,13 +39,16 @@ public class OfferService {
      * Create a new offer for a listing
      */
     @Transactional
-    public OfferResponse createOffer(Long buyerId, CreateOfferRequest request) {
-        // Validate listing exists and is available
+    public OfferResponse createOffer(Long buyerId, CreateOfferRequest request) {        // Validate listing exists and is available
         Listing listing = listingRepository.findById(request.getListingId())
             .orElseThrow(() -> new RuntimeException("Listing không tồn tại!"));
             
         if (listing.getStatus() != ListingStatus.AVAILABLE) {
-            throw new RuntimeException("Listing không còn khả dụng!");
+            if (listing.getStatus() == ListingStatus.SOLD) {
+                throw new RuntimeException("Sản phẩm này đã được bán!");
+            } else {
+                throw new RuntimeException("Listing không còn khả dụng!");
+            }
         }
         
         if (!listing.getIsNegotiable()) {
@@ -238,6 +241,21 @@ public class OfferService {
         Page<Offer> offers = offerRepository.findBySellerIdOrderByCreatedAtDesc(sellerId, pageable);
         return offers.map(this::convertToOfferResponse);
     }
+      /**
+     * Get active (non-completed) offers for a listing - for browsing
+     */
+    public Page<OfferResponse> getActiveOffersForListing(Long listingId, Pageable pageable) {
+        // Only return offers that are not COMPLETED (i.e., still available for purchase)
+        Page<Offer> offers = offerRepository.findByListingIdAndStatusNotOrderByCreatedAtDesc(listingId, OfferStatus.COMPLETED, pageable);
+        return offers.map(this::convertToOfferResponse);
+    }
+    
+    /**
+     * Check if listing is available for purchase (no completed offers)
+     */
+    public boolean isListingAvailableForPurchase(Long listingId) {
+        return !offerRepository.existsCompletedOfferByListingId(listingId);
+    }
     
     /**
      * Get pending offers count for a seller
@@ -261,10 +279,10 @@ public class OfferService {
         response.setCreatedAt(offer.getCreatedAt());
         response.setUpdatedAt(offer.getUpdatedAt());
         response.setExpiresAt(offer.getExpiresAt());
-        response.setExpired(offer.isExpired());
-        response.setCanBeAccepted(offer.canBeAccepted());
+        response.setExpired(offer.isExpired());        response.setCanBeAccepted(offer.canBeAccepted());
         response.setCanBeRejected(offer.canBeRejected());
         response.setCanBeCountered(offer.canBeCountered());
+        response.setHasPaidTransaction(offer.getHasPaidTransaction() != null ? offer.getHasPaidTransaction() : false);
         
         // Get listing details
         listingRepository.findById(offer.getListingId()).ifPresent(listing -> {

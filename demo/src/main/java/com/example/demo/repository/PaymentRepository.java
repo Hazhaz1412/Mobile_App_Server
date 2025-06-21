@@ -54,4 +54,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     
     // Tìm payment theo listingId, buyerId và status cụ thể
     List<Payment> findByListingIdAndBuyerIdAndStatus(Long listingId, Long buyerId, Payment.PaymentStatus status);
+    
+    // Tìm payment theo offer ID
+    List<Payment> findByOfferIdOrderByCreatedAtDesc(Long offerId);
 }

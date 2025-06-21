@@ -17,23 +17,24 @@ public class PaymentMockService {
     private static final Logger logger = LoggerFactory.getLogger(PaymentMockService.class);
     
     private final PaymentRepository paymentRepository;
+    private final PaymentCompletionService paymentCompletionService;
     private final Random random = new Random();
     
-    public PaymentMockService(PaymentRepository paymentRepository) {
+    public PaymentMockService(PaymentRepository paymentRepository, PaymentCompletionService paymentCompletionService) {
         this.paymentRepository = paymentRepository;
+        this.paymentCompletionService = paymentCompletionService;
     }
-    
-    /**
+      /**
      * Create a mock Stripe payment session for testing
      */
     public Map<String, Object> createMockStripeSession(Long listingId, Double amount, String description, 
-                                                      Long buyerId, Long sellerId, String successUrl) {
-        logger.info("Creating mock Stripe payment session for listing: {}, amount: {}", listingId, amount);
+                                                      Long buyerId, Long sellerId, String successUrl, Long offerId) {
+        logger.info("Creating mock Stripe payment session for listing: {}, amount: {}, offerId: {}", listingId, amount, offerId);
         
-        try {
-            // Create payment record in database
+        try {            // Create payment record in database
             Payment payment = new Payment();
             payment.setListingId(listingId);
+            payment.setOfferId(offerId); // 🔥 CRITICAL FIX: Set offerId!
             payment.setAmount(BigDecimal.valueOf(amount));
             payment.setDescription(description);
             payment.setBuyerId(buyerId);
@@ -146,13 +147,17 @@ public class PaymentMockService {
         
         try {
             Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new RuntimeException("Payment not found"));
-                  // Update payment status to completed
+                .orElseThrow(() -> new RuntimeException("Payment not found"));            // Update payment status to completed
             payment.setStatus(Payment.PaymentStatus.COMPLETED);
             payment.setPaidAt(LocalDateTime.now());
             payment.setUpdatedAt(LocalDateTime.now());
             
-            paymentRepository.save(payment);
+            // Save payment first
+            payment = paymentRepository.save(payment);
+            
+            // CRITICAL: Handle payment completion (lock offers, create transactions)
+            logger.info("MOCK_COMPLETION: Triggering completion handler for payment {}", paymentId);
+            paymentCompletionService.handlePaymentCompletion(payment);
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);

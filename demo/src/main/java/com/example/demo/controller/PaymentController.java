@@ -1,16 +1,21 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.payment.*;
+import com.example.demo.entity.Payment;
 import com.example.demo.service.payment.PaymentService;
 import com.example.demo.service.payment.StripePaymentService;
 import com.example.demo.service.EscrowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.HashMap;
+import java.util.Map;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -350,16 +355,25 @@ public class PaymentController {
             ));
         }
     }
-    
-    /**
+      /**
      * Create Stripe payment session
      * POST /api/v1/payments/stripe/create
      */
     @PostMapping("/stripe/create")
     public ResponseEntity<Map<String, Object>> createStripePayment(@Valid @RequestBody CreatePaymentRequest request) {
         try {
-            log.info("Creating Stripe payment for listing: {}, buyer: {}, amount: {}", 
-                    request.getListingId(), request.getBuyerId(), request.getAmount());
+            log.info("Creating Stripe payment for listing: {}, offer: {}, buyer: {}, amount: {}", 
+                    request.getListingId(), request.getOfferId(), request.getBuyerId(), request.getAmount());
+            
+            // CRITICAL: Check if offer can be purchased (prevent multiple purchases)
+            if (request.getOfferId() != null && !paymentService.canPurchaseOffer(request.getOfferId())) {
+                log.warn("BLOCKED: Attempt to purchase already completed offer: {}", request.getOfferId());
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Offer này đã được thanh toán và hoàn thành",
+                    "error_code", "OFFER_ALREADY_COMPLETED"
+                ));
+            }
             
             // Validate request
             if (request.getAmount() == null || request.getAmount().doubleValue() <= 0) {
@@ -369,15 +383,31 @@ public class PaymentController {
                 ));
             }
             
+            // Use the standard payment service to ensure all validation logic is applied
+            request.setPaymentMethodType(Payment.PaymentMethodType.STRIPE);
+            CreatePaymentResponse paymentResponse = paymentService.createPayment(request);
+            
+            if (!paymentResponse.isSuccess()) {
+                log.warn("Payment creation failed: {}", paymentResponse.getMessage());
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", paymentResponse.getMessage(),
+                    "error_code", "PAYMENT_CREATION_FAILED"
+                ));
+            }
+              // If payment creation succeeded, create Stripe session
             Map<String, Object> response = stripePaymentService.createPaymentSession(
                 request.getListingId(),
                 request.getAmount().doubleValue(),
                 request.getDescription(),
                 request.getBuyerId(),
-                request.getSellerId()
+                request.getSellerId(),
+                paymentResponse.getPayment().getId()
             );
             
+            // Add payment info to response
             if ((Boolean) response.get("success")) {
+                response.put("payment", paymentResponse.getPayment());
                 return ResponseEntity.ok(response);
             } else {
                 return ResponseEntity.badRequest().body(response);
@@ -391,7 +421,7 @@ public class PaymentController {
                     "error_code", "STRIPE_CREATE_ERROR"
             ));
         }
-    }    /**
+    }/**
      * Stripe real checkout page (query param version)
      * GET /api/v1/payments/stripe/checkout?paymentId=123
      */
@@ -468,8 +498,7 @@ public class PaymentController {
             ));
         }
     }
-    
-    /**
+      /**
      * Handle Stripe payment success
      * GET /api/v1/payments/success/stripe
      */
@@ -478,311 +507,154 @@ public class PaymentController {
             @RequestParam("session_id") String sessionId,
             @RequestParam("payment_id") Long paymentId) {
         
-        log.info("Stripe payment success - Session: {}, Payment: {}", sessionId, paymentId);
+        log.info("🎉 Stripe payment success - Session: {}, Payment: {}", sessionId, paymentId);
         
         try {
-            // Update payment status to COMPLETED
-            paymentService.updatePaymentStatus(paymentId, "COMPLETED", null);
+            // Use StripePaymentService to handle completion properly
+            boolean success = stripePaymentService.handleSuccessCallback(sessionId, paymentId.toString());
+            
+            if (success) {
+                log.info("✅ Payment {} completed successfully via success callback", paymentId);
+                
+                String html = "<html><body style='font-family: Arial, sans-serif; text-align: center; padding: 50px;'>" +
+                        "<h1 style='color: #28a745;'>✅ Thanh toán thành công!</h1>" +
+                        "<p><strong>Payment ID:</strong> " + paymentId + "</p>" +
+                        "<p><strong>Session ID:</strong> " + sessionId + "</p>" +
+                        "<p style='color: #28a745; font-weight: bold;'>🎉 Đơn hàng của bạn đã được xác nhận!</p>" +
+                        "<p>Cảm ơn bạn đã sử dụng TradeUp!</p>" +
+                        "<script>setTimeout(() => { window.close(); }, 3000);</script>" +
+                        "</body></html>";
+                
+                return ResponseEntity.ok()
+                        .header("Content-Type", "text/html; charset=UTF-8")
+                        .body(html);
+            } else {
+                log.error("❌ Failed to process payment completion for payment {}", paymentId);
+                
+                String html = "<html><body style='font-family: Arial, sans-serif; text-align: center; padding: 50px;'>" +
+                        "<h1 style='color: #dc3545;'>⚠️ Lỗi xử lý thanh toán</h1>" +
+                        "<p>Payment ID: " + paymentId + "</p>" +
+                        "<p>Vui lòng liên hệ hỗ trợ để được giúp đỡ.</p>" +
+                        "<script>setTimeout(() => { window.close(); }, 3000);</script>" +
+                        "</body></html>";
+                
+                return ResponseEntity.status(500)
+                        .header("Content-Type", "text/html; charset=UTF-8")
+                        .body(html);
+            }
+            
+        } catch (Exception e) {
+            log.error("💥 Error processing Stripe success for payment {}: ", paymentId, e);
             
             String html = "<html><body style='font-family: Arial, sans-serif; text-align: center; padding: 50px;'>" +
-                    "<h1 style='color: #28a745;'>✅ Thanh toán thành công!</h1>" +
+                    "<h1 style='color: #dc3545;'>💥 Lỗi hệ thống</h1>" +
                     "<p>Payment ID: " + paymentId + "</p>" +
-                    "<p>Session ID: " + sessionId + "</p>" +
-                    "<p>Cảm ơn bạn đã sử dụng TradeUp!</p>" +
+                    "<p>Đã xảy ra lỗi khi xử lý thanh toán. Vui lòng liên hệ hỗ trợ.</p>" +
                     "<script>setTimeout(() => { window.close(); }, 3000);</script>" +
                     "</body></html>";
             
-            return ResponseEntity.ok()
+            return ResponseEntity.status(500)
                     .header("Content-Type", "text/html; charset=UTF-8")
                     .body(html);
-            
-        } catch (Exception e) {
-            log.error("Error processing Stripe success", e);
-            return ResponseEntity.status(500).body("Error processing payment");
-        }
-    }
-    
-    @GetMapping("/cancel/stripe")
-    public ResponseEntity<String> stripePaymentCancel(@RequestParam("payment_id") Long paymentId) {
-        
-        log.info("Stripe payment cancelled - Payment: {}", paymentId);
-        
-        try {
-            // Update payment status to CANCELLED
-            paymentService.updatePaymentStatus(paymentId, "CANCELLED", null);
-            
-            String html = "<html><body style='font-family: Arial, sans-serif; text-align: center; padding: 50px;'>" +
-                    "<h1 style='color: #dc3545;'>❌ Thanh toán đã bị hủy</h1>" +
-                    "<p>Payment ID: " + paymentId + "</p>" +
-                    "<p>Bạn có thể thử lại thanh toán bất cứ lúc nào.</p>" +
-                    "<script>setTimeout(() => { window.close(); }, 3000);</script>" +
-                    "</body></html>";
-            
-            return ResponseEntity.ok()
-                    .header("Content-Type", "text/html; charset=UTF-8")
-                    .body(html);
-            
-        } catch (Exception e) {
-            log.error("Error processing Stripe cancellation", e);
-            return ResponseEntity.status(500).body("Error processing cancellation");
         }
     }
     
     /**
-     * Handle Stripe webhooks
-     * POST /api/v1/payments/stripe/webhook
+     * Handle Stripe payment success (Payment Intent flow - only paymentId needed)
+     * GET /api/v1/payments/stripe/success?paymentId=123
      */
-    @PostMapping("/stripe/webhook")
-    public ResponseEntity<Map<String, Object>> handleStripeWebhook(
-            @RequestBody String payload,
-            @RequestHeader(value = "Stripe-Signature", required = false) String sigHeader) {
-        try {
-            log.info("Received Stripe webhook");
-            
-            Map<String, Object> response = stripePaymentService.handleWebhook(payload, sigHeader);
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            log.error("Error handling Stripe webhook", e);
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "Error processing webhook: " + e.getMessage()
-            ));
-        }
-    }
-      // ========== STRIPE MOCK CHECKOUT PAGE ==========
-      @GetMapping("/stripe/mock-checkout")
-    public ResponseEntity<String> stripeMockCheckout(
-            @RequestParam("session_id") String sessionId,
-            @RequestParam("payment_id") Long paymentId) {
+    @GetMapping("/stripe/success")
+    public ResponseEntity<String> stripePaymentSuccessById(@RequestParam("paymentId") Long paymentId) {
         
-        log.info("Displaying Stripe mock checkout page - Session: {}, Payment: {}", sessionId, paymentId);
+        log.info("🎯 Stripe payment success (Payment Intent) - Payment: {}", paymentId);
         
         try {
-            // Get payment details for display
-            PaymentResponse payment = paymentService.getPayment(paymentId);
+            // Use StripePaymentService to handle completion properly (no session_id for Payment Intent)
+            boolean success = stripePaymentService.handleSuccessCallback(null, paymentId.toString());
             
-            String html = generateMockCheckoutHtml(sessionId, paymentId, payment);
-            return ResponseEntity.ok()
-                    .header("Content-Type", "text/html; charset=UTF-8")
-                    .body(html);
+            if (success) {
+                log.info("✅ Payment {} completed successfully via Payment Intent callback", paymentId);
+                
+                String html = generateSuccessPage(paymentId, null);
+                
+                return ResponseEntity.ok()
+                        .header("Content-Type", "text/html; charset=UTF-8")
+                        .body(html);
+            } else {
+                log.error("❌ Failed to process Payment Intent completion for payment {}", paymentId);
+                
+                String html = generateErrorPage(paymentId, "Lỗi xử lý thanh toán");
+                
+                return ResponseEntity.status(500)
+                        .header("Content-Type", "text/html; charset=UTF-8")
+                        .body(html);
+            }
             
         } catch (Exception e) {
-            log.error("Error loading mock checkout page", e);
+            log.error("💥 Error processing Payment Intent success for payment {}: ", paymentId, e);
             
-            String html = generateMockCheckoutHtml(sessionId, paymentId, null);
-            return ResponseEntity.ok()
+            String html = generateErrorPage(paymentId, "Lỗi hệ thống");
+            
+            return ResponseEntity.status(500)
                     .header("Content-Type", "text/html; charset=UTF-8")
                     .body(html);
         }
     }
     
-    private String generateMockCheckoutHtml(String sessionId, Long paymentId, PaymentResponse payment) {
-        String amount = payment != null ? payment.getAmount() + " VND" : "150,000 VND";
-        String description = payment != null && payment.getDescription() != null ? payment.getDescription() : "TradeUp Purchase";
-        
-        return "<!DOCTYPE html>\n" +
-                "<html lang=\"vi\">\n" +
-                "<head>\n" +
-                "    <meta charset=\"UTF-8\">\n" +
-                "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
-                "    <title>TradeUp - Mock Stripe Checkout</title>\n" +
-                "    <style>\n" +
-                "        * { margin: 0; padding: 0; box-sizing: border-box; }\n" +
-                "        body {\n" +
-                "            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
-                "            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n" +
-                "            min-height: 100vh;\n" +
-                "            display: flex;\n" +
-                "            align-items: center;\n" +
-                "            justify-content: center;\n" +
-                "            padding: 20px;\n" +
-                "        }\n" +
-                "        .checkout-container {\n" +
-                "            background: white;\n" +
-                "            border-radius: 12px;\n" +
-                "            box-shadow: 0 20px 40px rgba(0,0,0,0.1);\n" +
-                "            padding: 40px;\n" +
-                "            max-width: 500px;\n" +
-                "            width: 100%;\n" +
-                "            text-align: center;\n" +
-                "        }\n" +
-                "        .logo {\n" +
-                "            color: #635bff;\n" +
-                "            font-size: 24px;\n" +
-                "            font-weight: bold;\n" +
-                "            margin-bottom: 20px;\n" +
-                "        }\n" +
-                "        .mock-badge {\n" +
-                "            background: #ff6b6b;\n" +
-                "            color: white;\n" +
-                "            padding: 4px 12px;\n" +
-                "            border-radius: 20px;\n" +
-                "            font-size: 12px;\n" +
-                "            font-weight: bold;\n" +
-                "            display: inline-block;\n" +
-                "            margin-bottom: 30px;\n" +
-                "        }\n" +
-                "        .payment-details {\n" +
-                "            background: #f8f9fa;\n" +
-                "            border-radius: 8px;\n" +
-                "            padding: 20px;\n" +
-                "            margin-bottom: 30px;\n" +
-                "        }\n" +
-                "        .payment-item {\n" +
-                "            display: flex;\n" +
-                "            justify-content: space-between;\n" +
-                "            margin-bottom: 10px;\n" +
-                "            font-size: 14px;\n" +
-                "        }\n" +
-                "        .payment-item:last-child {\n" +
-                "            font-weight: bold;\n" +
-                "            font-size: 16px;\n" +
-                "            border-top: 1px solid #dee2e6;\n" +
-                "            padding-top: 10px;\n" +
-                "            margin-bottom: 0;\n" +
-                "        }\n" +
-                "        .mock-card {\n" +
-                "            background: #635bff;\n" +
-                "            color: white;\n" +
-                "            border-radius: 8px;\n" +
-                "            padding: 20px;\n" +
-                "            margin-bottom: 30px;\n" +
-                "        }\n" +
-                "        .card-number {\n" +
-                "            font-size: 18px;\n" +
-                "            font-weight: bold;\n" +
-                "            letter-spacing: 2px;\n" +
-                "            margin-bottom: 10px;\n" +
-                "        }\n" +
-                "        .card-details {\n" +
-                "            display: flex;\n" +
-                "            justify-content: space-between;\n" +
-                "            font-size: 14px;\n" +
-                "        }\n" +
-                "        .button-group {\n" +
-                "            display: flex;\n" +
-                "            gap: 15px;\n" +
-                "            margin-top: 30px;\n" +
-                "        }\n" +
-                "        .btn {\n" +
-                "            flex: 1;\n" +
-                "            padding: 15px 20px;\n" +
-                "            border: none;\n" +
-                "            border-radius: 8px;\n" +
-                "            font-size: 16px;\n" +
-                "            font-weight: 600;\n" +
-                "            cursor: pointer;\n" +
-                "            transition: all 0.3s ease;\n" +
-                "        }\n" +
-                "        .btn-success {\n" +
-                "            background: #28a745;\n" +
-                "            color: white;\n" +
-                "        }\n" +
-                "        .btn-success:hover {\n" +
-                "            background: #218838;\n" +
-                "            transform: translateY(-2px);\n" +
-                "        }\n" +
-                "        .btn-danger {\n" +
-                "            background: #dc3545;\n" +
-                "            color: white;\n" +
-                "        }\n" +
-                "        .btn-danger:hover {\n" +
-                "            background: #c82333;\n" +
-                "            transform: translateY(-2px);\n" +
-                "        }\n" +
-                "        .processing {\n" +
-                "            display: none;\n" +
-                "            color: #6c757d;\n" +
-                "            font-style: italic;\n" +
-                "            margin-top: 20px;\n" +
-                "        }\n" +
-                "        .footer {\n" +
-                "            margin-top: 30px;\n" +
-                "            font-size: 12px;\n" +
-                "            color: #6c757d;\n" +
-                "            border-top: 1px solid #e9ecef;\n" +
-                "            padding-top: 20px;\n" +
-                "        }\n" +
-                "    </style>\n" +
-                "</head>\n" +
-                "<body>\n" +
-                "    <div class=\"checkout-container\">\n" +
-                "        <div class=\"logo\">🔒 Stripe Checkout</div>\n" +
-                "        <div class=\"mock-badge\">MOCK MODE</div>\n" +
-                "        \n" +
-                "        <div class=\"payment-details\">\n" +
-                "            <div class=\"payment-item\">\n" +
-                "                <span>Sản phẩm:</span>\n" +
-                "                <span>" + description + "</span>\n" +
-                "            </div>\n" +
-                "            <div class=\"payment-item\">\n" +
-                "                <span>Số tiền:</span>\n" +
-                "                <span>" + amount + "</span>\n" +
-                "            </div>\n" +
-                "            <div class=\"payment-item\">\n" +
-                "                <span>Phí xử lý:</span>\n" +
-                "                <span>0 VND</span>\n" +
-                "            </div>\n" +
-                "            <div class=\"payment-item\">\n" +
-                "                <span>Tổng cộng:</span>\n" +
-                "                <span>" + amount + "</span>\n" +
-                "            </div>\n" +
-                "        </div>\n" +
-                "        \n" +
-                "        <div class=\"mock-card\">\n" +
-                "            <div class=\"card-number\">4242 4242 4242 4242</div>\n" +
-                "            <div class=\"card-details\">\n" +
-                "                <span>Hết hạn: 12/28</span>\n" +
-                "                <span>CVC: 123</span>\n" +
-                "            </div>\n" +
-                "        </div>\n" +
-                "        \n" +
-                "        <div class=\"button-group\">\n" +
-                "            <button class=\"btn btn-success\" onclick=\"processPayment(true)\">\n" +
-                "                ✓ Thanh toán thành công\n" +
-                "            </button>\n" +
-                "            <button class=\"btn btn-danger\" onclick=\"processPayment(false)\">\n" +
-                "                ✗ Hủy thanh toán\n" +
-                "            </button>\n" +
-                "        </div>\n" +
-                "        \n" +
-                "        <div class=\"processing\" id=\"processing\">\n" +
-                "            Đang xử lý thanh toán...\n" +
-                "        </div>\n" +
-                "        \n" +
-                "        <div class=\"footer\">\n" +
-                "            <p><strong>Chế độ Mock:</strong> Đây là trang thanh toán giả lập cho mục đích test.</p>\n" +
-                "            <p>Session ID: " + sessionId + "</p>\n" +
-                "            <p>Payment ID: " + paymentId + "</p>\n" +
-                "        </div>\n" +
-                "    </div>\n" +
-                "\n" +
-                "    <script>\n" +
-                "        function processPayment(success) {\n" +
-                "            document.getElementById('processing').style.display = 'block';\n" +
-                "            document.querySelectorAll('.btn').forEach(btn => btn.disabled = true);\n" +
-                "            \n" +
-                "            setTimeout(() => {\n" +
-                "                if (success) {\n" +
-                "                    window.location.href = '/api/v1/payments/success/stripe?session_id=" + sessionId + "&payment_id=" + paymentId + "';\n" +
-                "                } else {\n" +
-                "                    window.location.href = '/api/v1/payments/cancel/stripe?payment_id=" + paymentId + "';\n" +
-                "                }\n" +
-                "            }, 2000);\n" +
-                "        }\n" +
-                "        \n" +
-                "        setTimeout(() => {\n" +
-                "            if (document.getElementById('processing').style.display === 'none' || document.getElementById('processing').style.display === '') {\n" +
-                "                alert('Phiên thanh toán sẽ hết hạn trong 5 giây...');\n" +
-                "                setTimeout(() => {\n" +
-                "                    processPayment(false);\n" +
-                "                }, 5000);\n" +
-                "            }\n" +                "        }, 55000);\n" +
-                "    </script>\n" +
-                "</body>\n" +
-                "</html>";
+    private String generateSuccessPage(Long paymentId, String sessionId) {
+        return "<html><head>" +
+                "<title>Payment Successful</title>" +
+                "<meta charset=\"UTF-8\">" +
+                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" +
+                "<style>" +
+                "body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }" +
+                ".success-container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }" +
+                ".success-icon { color: #28a745; font-size: 60px; margin-bottom: 20px; }" +
+                "h1 { color: #28a745; margin-bottom: 20px; }" +
+                "p { color: #666; margin-bottom: 30px; }" +
+                ".details { text-align: left; background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }" +
+                ".close-btn { background: #007bff; color: white; border: none; padding: 12px 30px; border-radius: 5px; cursor: pointer; font-size: 16px; }" +
+                ".close-btn:hover { background: #0056b3; }" +
+                "</style>" +
+                "</head><body>" +
+                "<div class=\"success-container\">" +
+                "<div class=\"success-icon\">✅</div>" +
+                "<h1>Payment Successful!</h1>" +
+                "<p>Your payment has been processed successfully and your order has been confirmed.</p>" +
+                "<div class=\"details\">" +
+                "<strong>Session ID:</strong> " + (sessionId != null ? sessionId : "null") + "<br>" +
+                "<strong>Payment ID:</strong> " + paymentId + "<br>" +
+                "<strong>Status:</strong> Completed" +
+                "</div>" +
+                "<button class=\"close-btn\" onclick=\"window.close()\">Close Window</button>" +
+                "<script>" +
+                "// Auto close after 5 seconds" +
+                "setTimeout(function() {" +
+                "    window.close();" +
+                "}, 5000);" +
+                "</script>" +
+                "</div></body></html>";
+    }
+    
+    private String generateErrorPage(Long paymentId, String errorTitle) {
+        return "<html><head>" +
+                "<title>Payment Error</title>" +
+                "<meta charset=\"UTF-8\">" +
+                "<style>" +
+                "body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }" +
+                ".error-container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }" +
+                ".error-icon { color: #dc3545; font-size: 60px; margin-bottom: 20px; }" +
+                "h1 { color: #dc3545; margin-bottom: 20px; }" +
+                "p { color: #666; margin-bottom: 30px; }" +
+                "</style>" +
+                "</head><body>" +
+                "<div class=\"error-container\">" +
+                "<div class=\"error-icon\">❌</div>" +
+                "<h1>" + errorTitle + "</h1>" +
+                "<p>Payment ID: " + paymentId + "</p>" +
+                "<p>Đã xảy ra lỗi khi xử lý thanh toán. Vui lòng liên hệ hỗ trợ.</p>" +
+                "<script>setTimeout(() => { window.close(); }, 3000);</script>" +
+                "</div></body></html>";
     }
     
     /**
@@ -823,6 +695,194 @@ public class PaymentController {
         } catch (Exception e) {
             log.error("Error getting seller name for user: {}", sellerId, e);
             return "Người bán TradeUp";
+        }
+    }
+    
+    // ==================== DEBUG ENDPOINTS ====================
+    
+    @GetMapping("/debug/offer/{offerId}")
+    public ResponseEntity<Map<String, Object>> getPaymentsByOffer(@PathVariable Long offerId) {
+        try {
+            log.info("Getting payments for offer: {}", offerId);
+            List<PaymentResponse> payments = paymentService.getPaymentsByOfferId(offerId);
+            
+            Map<String, Object> debug = Map.of(
+                "offerId", offerId,
+                "paymentCount", payments.size(),
+                "payments", payments
+            );
+            
+            return ResponseEntity.ok(debug);
+        } catch (Exception e) {
+            log.error("Error getting payments for offer: {}", offerId, e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    @PostMapping("/debug/complete-offer/{offerId}")
+    public ResponseEntity<Map<String, String>> debugCompleteOffer(@PathVariable Long offerId) {
+        try {
+            log.info("DEBUG: Manually completing offer: {}", offerId);
+            paymentService.debugCompleteOffer(offerId);
+            return ResponseEntity.ok(Map.of("message", "Offer " + offerId + " marked as completed"));
+        } catch (Exception e) {
+            log.error("Error completing offer: {}", offerId, e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    @PostMapping("/debug/fix-offer-id/{paymentId}/{offerId}")
+    public ResponseEntity<Map<String, Object>> debugFixOfferIdAndComplete(
+            @PathVariable Long paymentId, 
+            @PathVariable Long offerId) {
+        try {
+            log.info("DEBUG: Fixing offerId for payment {} -> offer {}", paymentId, offerId);
+            Map<String, Object> result = paymentService.debugFixOfferIdAndComplete(paymentId, offerId);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Error fixing offerId for payment {}: ", paymentId, e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    // ==================== STRIPE WEBHOOK ENDPOINT ====================
+    
+    /**
+     * Handle Stripe webhook events
+     * POST /api/v1/payments/webhook/stripe
+     */
+    @PostMapping("/webhook/stripe")
+    public ResponseEntity<Map<String, Object>> handleStripeWebhook(
+            @RequestBody String payload,
+            @RequestHeader(value = "Stripe-Signature", required = false) String signature) {
+        try {
+            log.info("🔔 Received Stripe webhook - Payload length: {}", payload != null ? payload.length() : 0);
+            
+            Map<String, Object> result = stripePaymentService.handleWebhook(payload, signature);
+            
+            if ((Boolean) result.getOrDefault("success", false)) {
+                log.info("✅ Stripe webhook processed successfully");
+                return ResponseEntity.ok(result);
+            } else {
+                log.error("❌ Stripe webhook processing failed: {}", result.get("message"));
+                return ResponseEntity.badRequest().body(result);
+            }
+            
+        } catch (Exception e) {
+            log.error("💥 Error processing Stripe webhook: ", e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "Internal error processing webhook: " + e.getMessage()
+            ));
+        }
+    }
+    
+    /**
+     * Test Stripe webhook endpoint
+     * GET /api/v1/payments/webhook/stripe/test
+     */
+    @GetMapping("/webhook/stripe/test")
+    public ResponseEntity<Map<String, Object>> testStripeWebhook() {
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "message", "Stripe webhook endpoint is working",
+            "endpoint", "/api/v1/payments/webhook/stripe",
+            "devtunnel_url", "https://zn8vnhrf-8080.asse.devtunnels.ms/api/v1/payments/webhook/stripe",
+            "instructions", "Cấu hình URL này trong Stripe Dashboard → Developers → Webhooks"
+        ));
+    }
+    
+    @GetMapping("/debug/payment/{paymentId}")
+    public ResponseEntity<Map<String, Object>> debugGetPayment(@PathVariable Long paymentId) {
+        try {
+            log.info("DEBUG: Getting payment details for payment: {}", paymentId);
+            Payment payment = paymentService.findById(paymentId);
+            
+            if (payment == null) {
+                return ResponseEntity.notFound().build();
+            }
+              Map<String, Object> debug = new HashMap<>();
+            debug.put("paymentId", payment.getId());
+            debug.put("offerId", payment.getOfferId());
+            debug.put("listingId", payment.getListingId());
+            debug.put("buyerId", payment.getBuyerId());
+            debug.put("sellerId", payment.getSellerId());
+            debug.put("amount", payment.getAmount());
+            debug.put("status", payment.getStatus().toString());
+            debug.put("paymentMethod", payment.getPaymentMethodType().toString());
+            debug.put("transactionId", payment.getTransactionId());
+            debug.put("createdAt", payment.getCreatedAt());
+            debug.put("hasOfferId", payment.getOfferId() != null);
+            
+            return ResponseEntity.ok(debug);
+        } catch (Exception e) {
+            log.error("Error getting payment details: {}", paymentId, e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    @GetMapping("/debug/status")
+    public ResponseEntity<Map<String, Object>> debugGetAllPaymentsStatus() {
+        try {
+            log.info("DEBUG: Getting all payments status");
+            // Get recent payments (limit to last 20)
+            List<Payment> payments = paymentService.getAllPayments(); // Need to implement this
+            
+            Map<String, Object> debug = Map.of(
+                "totalPayments", payments.size(),
+                "payments", payments.stream().map(p -> Map.of(
+                    "id", p.getId(),
+                    "offerId", p.getOfferId(),
+                    "listingId", p.getListingId(),
+                    "status", p.getStatus().toString(),
+                    "paymentMethod", p.getPaymentMethodType().toString(),
+                    "hasOfferId", p.getOfferId() != null
+                )).toList()
+            );
+            
+            return ResponseEntity.ok(debug);
+        } catch (Exception e) {
+            log.error("Error getting payments status", e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * TEST ENDPOINT: Force complete a payment (no auth required for testing)
+     */
+    @PostMapping("/test/force-complete/{paymentId}")
+    public ResponseEntity<Map<String, Object>> testForceCompletePayment(@PathVariable Long paymentId) {
+        try {
+            log.info("🧪 TEST: Force completing payment {}", paymentId);
+            
+            // Find payment
+            Payment payment = paymentService.findById(paymentId);
+            if (payment == null) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            // Call force completion
+            stripePaymentService.forceCompleteOfferFromPayment(payment);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Force completion triggered successfully");
+            response.put("paymentId", paymentId);
+            response.put("testMode", true);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error in test force completion", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Failed to force complete: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
 }

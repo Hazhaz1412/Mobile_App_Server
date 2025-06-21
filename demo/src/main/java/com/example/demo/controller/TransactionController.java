@@ -333,42 +333,47 @@ public class TransactionController {
      * Debug endpoint to list all transactions
      */
     @GetMapping("/debug/all")
-    public ResponseEntity<ApiResponse> getAllTransactionsDebug() {
+    public ResponseEntity<?> getAllTransactions() {
         try {
-            Iterable<Transaction> transactions = transactionRepository.findAll();
-            List<Map<String, Object>> transactionList = new ArrayList<>();
-            
-            for (Transaction transaction : transactions) {                Map<String, Object> transactionMap = Map.of(
-                    "id", transaction.getId(),
-                    "listingId", transaction.getListingId(),
-                    "buyerId", transaction.getBuyerId(),
-                    "sellerId", transaction.getSellerId(),
-                    "status", transaction.getStatus().toString(),
-                    "finalPrice", transaction.getFinalPrice(),
-                    "createdAt", transaction.getCreatedAt() != null ? transaction.getCreatedAt().toString() : "null",
-                    "completionDate", transaction.getCompletionDate() != null ? transaction.getCompletionDate().toString() : "null"
-                );
-                transactionList.add(transactionMap);
-            }
-            
-            return ResponseEntity.ok(new ApiResponse(
-                true,
-                "All transactions retrieved for debug",
-                transactionList
+            List<Transaction> transactions = transactionRepository.findAll();
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "transactions", transactions,
+                "count", transactions.size()
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new ApiResponse(
                 false,
-                "Error retrieving transactions: " + e.getMessage()
+                "Error: " + e.getMessage()
+            ));
+        }
+    }
+      /**
+     * Debug endpoint to check transactions by listing
+     */
+    @GetMapping("/debug/by-listing/{listingId}")
+    public ResponseEntity<?> getTransactionsByListing(@PathVariable Long listingId) {
+        try {
+            List<Transaction> transactions = transactionRepository.findByListingIdOrderByTransactionDateDesc(listingId);
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "listingId", listingId,
+                "transactions", transactions,
+                "count", transactions.size()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ApiResponse(
+                false,
+                "Error: " + e.getMessage()
             ));
         }
     }
     
     /**
-     * Debug endpoint to mark a transaction as completed (for testing)
+     * Debug endpoint to manually complete a transaction for testing
      */
     @PostMapping("/debug/complete/{transactionId}")
-    public ResponseEntity<ApiResponse> markTransactionCompleted(@PathVariable Long transactionId) {
+    public ResponseEntity<?> completeTransaction(@PathVariable Long transactionId) {
         try {
             Optional<Transaction> transactionOpt = transactionRepository.findById(transactionId);
             if (transactionOpt.isPresent()) {
@@ -376,10 +381,11 @@ public class TransactionController {
                 transaction.markAsCompleted();
                 transactionRepository.save(transaction);
                 
-                return ResponseEntity.ok(new ApiResponse(
-                    true,
-                    "Transaction marked as completed for testing",
-                    Map.of("transactionId", transactionId, "status", "COMPLETED")
+                return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Transaction completed successfully",
+                    "transactionId", transactionId,
+                    "status", transaction.getStatus()
                 ));
             } else {
                 return ResponseEntity.badRequest().body(new ApiResponse(
@@ -390,11 +396,11 @@ public class TransactionController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new ApiResponse(
                 false,
-                "Error marking transaction as completed: " + e.getMessage()
+                "Error: " + e.getMessage()
             ));
         }
     }
-    
+
     /**
      * Debug endpoint to create a test transaction for rating
      */
@@ -425,6 +431,49 @@ public class TransactionController {
             return ResponseEntity.badRequest().body(new ApiResponse(
                 false,
                 "Error creating test transaction: " + e.getMessage()
+            ));
+        }
+    }    /**
+     * Get transaction by offer ID
+     */
+    @GetMapping("/offer/{offerId}")
+    public ResponseEntity<ApiResponse> getTransactionByOfferId(@PathVariable Long offerId) {
+        try {
+            // Find transaction by offer ID
+            Optional<Transaction> transactionOpt = transactionRepository.findByOfferId(offerId);
+            
+            if (transactionOpt.isPresent()) {
+                Transaction transaction = transactionOpt.get();
+                
+                // Simple conversion to TransactionResponse
+                TransactionResponse response = new TransactionResponse();
+                response.setId(transaction.getId());
+                response.setListingId(transaction.getListingId());
+                response.setBuyerId(transaction.getBuyerId());
+                response.setSellerId(transaction.getSellerId());
+                response.setFinalPrice(transaction.getFinalPrice());
+                response.setOfferId(transaction.getOfferId());
+                response.setStatus(transaction.getStatus());
+                response.setTransactionDate(transaction.getTransactionDate());
+                response.setCompletionDate(transaction.getCompletionDate());
+                response.setNotes(transaction.getNotes());
+                
+                return ResponseEntity.ok(new ApiResponse(
+                    true,
+                    "Lấy thông tin giao dịch thành công!",
+                    response
+                ));
+            } else {
+                return ResponseEntity.ok(new ApiResponse(
+                    true,
+                    "Chưa có giao dịch cho offer này",
+                    null
+                ));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ApiResponse(
+                false,
+                "Lỗi khi lấy thông tin giao dịch: " + e.getMessage()
             ));
         }
     }

@@ -1,6 +1,9 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.*;
+import com.example.demo.entity.Offer;
+import com.example.demo.entity.OfferStatus;
+import com.example.demo.repository.OfferRepository;
 import com.example.demo.service.OfferService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -10,15 +13,20 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/offers")
 @CrossOrigin(origins = "*")
 public class OfferController {
+      @Autowired
+    private OfferService offerService;
     
     @Autowired
-    private OfferService offerService;
-      /**
+    private OfferRepository offerRepository;
+    
+    /**
      * Create a new offer
      */
     @PostMapping
@@ -110,7 +118,126 @@ public class OfferController {
             return ResponseEntity.badRequest().body(new PagedApiResponse<>(
                 false,
                 e.getMessage(),
-                null, 0, 0, 0, 0
+                null,
+                0, 0, 0L, 0
+            ));
+        }
+    }
+    
+    /**
+     * Get active (purchasable) offers for a specific listing - for browsing
+     */
+    @GetMapping("/listing/{listingId}/active")
+    public ResponseEntity<PagedApiResponse<OfferResponse>> getActiveOffersForListing(
+            @PathVariable Long listingId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            Page<OfferResponse> offers = offerService.getActiveOffersForListing(listingId, pageable);
+            
+            return ResponseEntity.ok(new PagedApiResponse<>(
+                true,
+                "Lấy danh sách offers khả dụng thành công!",
+                offers.getContent(),
+                offers.getNumber(),
+                offers.getSize(),
+                offers.getTotalElements(),
+                offers.getTotalPages()
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(new PagedApiResponse<>(
+                false,
+                e.getMessage(),
+                null,
+                0, 0, 0L, 0
+            ));
+        }
+    }
+    
+    /**
+     * Check if listing is available for purchase
+     */
+    @GetMapping("/listing/{listingId}/available")
+    public ResponseEntity<Map<String, Object>> checkListingAvailability(@PathVariable Long listingId) {
+        try {
+            boolean available = offerService.isListingAvailableForPurchase(listingId);
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "available", available,
+                "message", available ? "Sản phẩm còn khả dụng" : "Sản phẩm đã được bán"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", e.getMessage()
+            ));
+        }
+    }
+    
+    /**
+     * Check specific offer status and purchasability
+     */
+    @GetMapping("/{offerId}/status")
+    public ResponseEntity<Map<String, Object>> checkOfferStatus(@PathVariable Long offerId) {
+        try {
+            Optional<Offer> offerOpt = offerRepository.findById(offerId);
+            if (offerOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            Offer offer = offerOpt.get();
+            boolean canPurchase = offer.getStatus() != OfferStatus.COMPLETED;
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "offer_id", offerId,
+                "status", offer.getStatus().toString(),
+                "can_purchase", canPurchase,
+                "message", canPurchase ? "Có thể mua" : "Đã được mua"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", e.getMessage()
+            ));
+        }
+    }
+    
+    /**
+     * Get offer details with updated status
+     */
+    @GetMapping("/{offerId}/details")
+    public ResponseEntity<Map<String, Object>> getOfferDetails(@PathVariable Long offerId) {
+        try {
+            Optional<Offer> offerOpt = offerRepository.findById(offerId);
+            if (offerOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            Offer offer = offerOpt.get();
+            boolean canPurchase = offer.getStatus() != OfferStatus.COMPLETED;
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "offer", Map.of(
+                    "id", offer.getId(),
+                    "listing_id", offer.getListingId(),
+                    "buyer_id", offer.getBuyerId(),
+                    "seller_id", offer.getSellerId(),
+                    "offer_amount", offer.getOfferAmount(),
+                    "status", offer.getStatus().toString(),
+                    "message", offer.getMessage(),
+                    "created_at", offer.getCreatedAt(),
+                    "updated_at", offer.getUpdatedAt()
+                ),
+                "can_purchase", canPurchase,
+                "ui_message", canPurchase ? "MUA NGAY" : "ĐÃ BÁN"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", e.getMessage()
             ));
         }
     }
@@ -213,6 +340,109 @@ public class OfferController {
                 false,
                 e.getMessage()
             ));
+        }
+    }
+    
+    /**
+     * DEBUG: Manually mark an offer as completed (for testing)
+     */
+    @PostMapping("/{offerId}/debug/mark-completed")
+    public ResponseEntity<Map<String, Object>> debugMarkOfferCompleted(@PathVariable Long offerId) {
+        try {
+            Optional<Offer> offerOpt = offerRepository.findById(offerId);
+            if (offerOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            Offer offer = offerOpt.get();
+            String oldStatus = offer.getStatus().toString();
+              // Mark offer as completed
+            offer.setStatus(OfferStatus.COMPLETED);
+            offer.setHasPaidTransaction(true);
+            offer.setUpdatedAt(java.time.LocalDateTime.now());
+            offerRepository.save(offer);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Offer marked as completed",
+                "offer_id", offerId,
+                "old_status", oldStatus,
+                "new_status", "COMPLETED"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", e.getMessage()
+            ));
+        }
+    }
+    
+    /**
+     * DEBUG: Reset offer status for testing
+     */
+    @PostMapping("/{offerId}/debug/reset-status")
+    public ResponseEntity<Map<String, Object>> debugResetOfferStatus(
+            @PathVariable Long offerId,
+            @RequestParam String status) {
+        try {
+            Optional<Offer> offerOpt = offerRepository.findById(offerId);
+            if (offerOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            Offer offer = offerOpt.get();
+            String oldStatus = offer.getStatus().toString();
+            
+            // Set new status
+            OfferStatus newStatus = OfferStatus.valueOf(status.toUpperCase());
+            offer.setStatus(newStatus);
+            offer.setUpdatedAt(java.time.LocalDateTime.now());
+            offerRepository.save(offer);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Offer status reset",
+                "offer_id", offerId,
+                "old_status", oldStatus,
+                "new_status", status.toUpperCase()
+            ));
+        } catch (Exception e) {            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", e.getMessage()
+            ));
+        }
+    }
+    
+    /**
+     * DEBUG: Manually complete an offer (for testing)
+     */
+    @PostMapping("/debug/complete/{offerId}")
+    public ResponseEntity<Map<String, Object>> debugCompleteOffer(@PathVariable Long offerId) {
+        try {
+            Optional<Offer> offerOpt = offerRepository.findById(offerId);
+            if (offerOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            Offer offer = offerOpt.get();
+            String oldStatus = offer.getStatus().toString();
+            
+            // Update offer status to COMPLETED
+            offer.setStatus(OfferStatus.COMPLETED);
+            offer.setUpdatedAt(java.time.LocalDateTime.now());
+            offerRepository.save(offer);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "offerId", offerId,
+                "oldStatus", oldStatus,
+                "newStatus", "COMPLETED",
+                "message", "Offer manually completed"
+            ));
+            
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("success", false, "error", e.getMessage()));
         }
     }
 }

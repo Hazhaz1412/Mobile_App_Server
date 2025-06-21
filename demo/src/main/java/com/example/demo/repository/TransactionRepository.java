@@ -39,6 +39,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     
     // Check if listing has completed transaction
     boolean existsByListingIdAndStatus(Long listingId, TransactionStatus status);
+      // Check if offer has completed transaction
+    boolean existsByOfferIdAndStatus(Long offerId, TransactionStatus status);
       // Get user's purchase history (as buyer)
     @Query("SELECT t FROM Transaction t WHERE t.buyerId = :userId AND t.status = 'COMPLETED' ORDER BY t.completionDate DESC")
     Page<Transaction> findUserPurchaseHistory(@Param("userId") Long userId, Pageable pageable);
@@ -71,6 +73,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     
     // Find transactions from offers
     List<Transaction> findByOfferIdIsNotNull();
+    
+    // Find transaction by specific offer ID
+    Optional<Transaction> findByOfferId(Long offerId);
     
     // Count pending transactions for user
     @Query("SELECT COUNT(t) FROM Transaction t WHERE (t.buyerId = :userId OR t.sellerId = :userId) AND t.status = 'PENDING'")

@@ -39,6 +39,9 @@ public class Offer {
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
     
+    @Column(name = "has_paid_transaction", nullable = false)
+    private Boolean hasPaidTransaction = false;
+    
     // Relationships
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "listing_id", insertable = false, updatable = false)
@@ -95,6 +98,9 @@ public class Offer {
     
     public LocalDateTime getExpiresAt() { return expiresAt; }
     public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
+    
+    public Boolean getHasPaidTransaction() { return hasPaidTransaction; }
+    public void setHasPaidTransaction(Boolean hasPaidTransaction) { this.hasPaidTransaction = hasPaidTransaction; }
     
     public Listing getListing() { return listing; }
     public void setListing(Listing listing) { this.listing = listing; }

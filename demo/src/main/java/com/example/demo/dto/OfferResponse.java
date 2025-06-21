@@ -26,6 +26,7 @@ public class OfferResponse {
     private boolean canBeAccepted;
     private boolean canBeRejected;
     private boolean canBeCountered;
+    private boolean hasPaidTransaction;
     
     // Constructors
     public OfferResponse() {}
@@ -93,6 +94,9 @@ public class OfferResponse {
     
     public boolean isCanBeCountered() { return canBeCountered; }
     public void setCanBeCountered(boolean canBeCountered) { this.canBeCountered = canBeCountered; }
+    
+    public boolean isHasPaidTransaction() { return hasPaidTransaction; }
+    public void setHasPaidTransaction(boolean hasPaidTransaction) { this.hasPaidTransaction = hasPaidTransaction; }
     
     // Helper methods
     public String getDiscountPercentage() {

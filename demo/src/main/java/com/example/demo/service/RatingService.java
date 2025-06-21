@@ -30,6 +30,9 @@ public class RatingService {
     @Autowired
     private TransactionRepository transactionRepository;
     
+    @Autowired
+    private UserProfileRepository userProfileRepository;
+    
     @Transactional
     public RatingResponse createRating(Long raterUserId, CreateRatingRequest request) {
         // Validate transaction exists
@@ -83,6 +86,9 @@ public class RatingService {
         );
         
         Rating savedRating = ratingRepository.save(rating);
+        
+        // Update user profile rating stats
+        updateUserProfileRating(request.getRatedUserId());
         
         return convertToResponse(savedRating);
     }
@@ -170,7 +176,8 @@ public class RatingService {
         Optional<Rating> ratingOpt = ratingRepository.findByTransactionIdAndRaterUserId(transactionId, userId);
         return ratingOpt.map(this::convertToResponse);
     }
-      private RatingResponse convertToResponse(Rating rating) {
+    
+    private RatingResponse convertToResponse(Rating rating) {
         // Get user names
         String raterUserName = userRepository.findById(rating.getRaterUserId())
                                             .map(User::getEmail)
@@ -198,5 +205,39 @@ public class RatingService {
             rating.getComment(),
             rating.getCreatedAt()
         );
+    }
+    
+    /**
+     * Update user profile rating stats after new rating
+     */
+    private void updateUserProfileRating(Long userId) {
+        // Calculate new rating average and count
+        Double averageRating = ratingRepository.getAverageRatingForUser(userId);
+        Long totalRatings = ratingRepository.countByRatedUserId(userId);
+        
+        if (averageRating == null) {
+            averageRating = 0.0;
+        }
+        
+        // Update user profile
+        Optional<UserProfile> profileOpt = userProfileRepository.findById(userId);
+        if (profileOpt.isPresent()) {
+            UserProfile profile = profileOpt.get();
+            profile.setRatingAvg(averageRating);
+            profile.setRatingCount(totalRatings.intValue());
+            userProfileRepository.save(profile);
+        }
+    }
+    
+    /**
+     * Recalculate and update rating stats for all users
+     */
+    @Transactional
+    public void recalculateAllUserRatingStats() {
+        List<UserProfile> allProfiles = userProfileRepository.findAll();
+        
+        for (UserProfile profile : allProfiles) {
+            updateUserProfileRating(profile.getUserId());
+        }
     }
 }
