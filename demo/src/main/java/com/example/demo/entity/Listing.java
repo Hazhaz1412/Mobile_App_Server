@@ -1,5 +1,7 @@
 package com.example.demo.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -7,8 +9,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "listings")
-
-
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Listing {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -59,18 +60,20 @@ public class Listing {
     
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
-    
-    // Relationships
+      // Relationships
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private User user;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", insertable = false, updatable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Category category;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "condition_id", insertable = false, updatable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private ItemCondition itemCondition;
     
     @OneToMany(mappedBy = "listingId", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
