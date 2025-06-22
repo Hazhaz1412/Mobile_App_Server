@@ -27,13 +27,19 @@ public class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                 // Allow static resources
                 .requestMatchers("/uploads/**").permitAll()
-                
-                // Allow OPTIONS requests for CORS
+                  // Allow OPTIONS requests for CORS
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                   // Public API endpoints
                 .requestMatchers("/api/auth/**").permitAll()
+                
+                // Protected user account management endpoints
+                .requestMatchers("/api/users/send-verification").authenticated()
+                .requestMatchers("/api/users/*/deactivate").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/api/users/*").authenticated()
+                
+                // Public user endpoints (profiles, etc.)
                 .requestMatchers("/api/users/**").permitAll()
-                .requestMatchers("/api/profiles/**").permitAll()                .requestMatchers("/api/listings/**").permitAll()
+                .requestMatchers("/api/profiles/**").permitAll().requestMatchers("/api/listings/**").permitAll()
                 .requestMatchers("/api/conditions/**").permitAll()
                 .requestMatchers("/api/categories/**").permitAll()
                 .requestMatchers("/api/offers/**").permitAll()

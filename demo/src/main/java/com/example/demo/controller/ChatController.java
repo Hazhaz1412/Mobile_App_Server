@@ -193,9 +193,7 @@ public class ChatController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(chatRoom);
-    }
-
-    /**
+    }    /**
      * Unblock a chat room
      */
     @PutMapping("/rooms/{chatRoomId}/unblock/{userId}")
@@ -207,5 +205,59 @@ public class ChatController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(chatRoom);
+    }
+      // 🔥 API endpoints cho sửa/xóa tin nhắn
+    /**
+     * Update a message
+     */
+    @PutMapping("/messages/{messageId}/user/{userId}")
+    public ResponseEntity<?> updateMessage(
+            @PathVariable Long messageId,
+            @PathVariable Long userId,
+            @RequestBody Map<String, Object> request) {
+        try {
+            String newContent = request.get("content").toString();
+            
+            // Verify that the authenticated user is the message sender
+            if (!verifyUserAccess(userId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new ApiResponse(false, "Access denied", null));
+            }
+            
+            ChatMessageResponse updatedMessage = chatService.updateMessage(messageId, newContent, userId);
+            if (updatedMessage == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse(false, "Message not found or access denied", null));
+            }
+            
+            return ResponseEntity.ok(new ApiResponse(true, "Message updated successfully", updatedMessage));
+            
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(new ApiResponse(false, "Invalid request format", null));
+        }
+    }
+    
+    /**
+     * Delete a message
+     */
+    @DeleteMapping("/messages/{messageId}/user/{userId}")
+    public ResponseEntity<?> deleteMessage(
+            @PathVariable Long messageId,
+            @PathVariable Long userId) {
+        
+        // Verify that the authenticated user is the message sender
+        if (!verifyUserAccess(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse(false, "Access denied", null));
+        }
+        
+        boolean deleted = chatService.deleteMessage(messageId, userId);
+        if (!deleted) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse(false, "Message not found or access denied", null));
+        }
+        
+        return ResponseEntity.ok(new ApiResponse(true, "Message deleted successfully", null));
     }
 }

@@ -227,4 +227,53 @@ public class UserService {
         return userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
     }
+    
+    /**
+     * Deactivate a user account
+     */
+    @Transactional
+    public User deactivateUser(Long userId) {
+        User user = getUserById(userId);
+        
+        if (user.getStatus() == UserStatus.DELETED) {
+            throw new RuntimeException("Cannot deactivate a deleted account");
+        }
+        
+        user.setStatus(UserStatus.DEACTIVATED);
+        user = userRepository.save(user);
+        
+        return user;
+    }
+    
+    /**
+     * Permanently delete a user account
+     */
+    @Transactional
+    public void deleteUser(Long userId) {
+        User user = getUserById(userId);
+        
+        // Mark as deleted rather than actually deleting to preserve data integrity
+        user.setStatus(UserStatus.DELETED);
+        userRepository.save(user);
+        
+        // Note: In a production system, you might want to:
+        // 1. Anonymize user data
+        // 2. Remove personal information
+        // 3. Keep transaction/audit trail data
+        // For now, we just mark as deleted
+    }
+    
+    /**
+     * Validate that a user can perform account operations
+     */
+    public void validateUserForAccountOperation(Long requestingUserId, Long targetUserId) {
+        if (!requestingUserId.equals(targetUserId)) {
+            throw new RuntimeException("You can only manage your own account");
+        }
+        
+        User user = getUserById(targetUserId);
+        if (user.getStatus() == UserStatus.DELETED) {
+            throw new RuntimeException("Account has already been deleted");
+        }
+    }
 }

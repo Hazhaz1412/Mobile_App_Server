@@ -8,10 +8,12 @@ public class ChatMessageResponse {
     private Long senderId;
     private String senderName;
     private String senderProfilePic;
-    private String content;
-    private String type;
+    private String content;    private String type;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private Boolean isRead;
+    private Boolean isEdited;
+    private String originalContent;
     
     // Constructors
     public ChatMessageResponse() {}
@@ -72,13 +74,20 @@ public class ChatMessageResponse {
     public void setType(String type) {
         this.type = type;
     }
-    
-    public LocalDateTime getCreatedAt() {
+      public LocalDateTime getCreatedAt() {
         return createdAt;
     }
     
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+    
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+    
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
     
     public Boolean getIsRead() {
@@ -87,5 +96,21 @@ public class ChatMessageResponse {
     
     public void setIsRead(Boolean isRead) {
         this.isRead = isRead;
+    }
+    
+    public Boolean getIsEdited() {
+        return isEdited;
+    }
+    
+    public void setIsEdited(Boolean isEdited) {
+        this.isEdited = isEdited;
+    }
+
+    public String getOriginalContent() {
+        return originalContent;
+    }
+
+    public void setOriginalContent(String originalContent) {
+        this.originalContent = originalContent;
     }
 }

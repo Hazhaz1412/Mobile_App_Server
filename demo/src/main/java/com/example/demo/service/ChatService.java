@@ -299,9 +299,7 @@ public class ChatService {
         response.setUnreadCount(unreadCount);
         
         return response;
-    }
-
-    /**
+    }    /**
      * Helper method to convert ChatMessage entity to ChatMessageResponse DTO
      */
     private ChatMessageResponse convertToChatMessageResponse(ChatMessage chatMessage) {
@@ -311,8 +309,10 @@ public class ChatService {
         response.setSenderId(chatMessage.getSenderId());
         response.setContent(chatMessage.getContent());
         response.setType(chatMessage.getType());
-        response.setCreatedAt(chatMessage.getCreatedAt());
+        response.setCreatedAt(chatMessage.getCreatedAt());        response.setUpdatedAt(chatMessage.getUpdatedAt());
         response.setIsRead(chatMessage.getIsRead());
+        response.setIsEdited(chatMessage.getIsEdited());
+        response.setOriginalContent(chatMessage.getOriginalContent());
         
         // Get sender profile for display name and profile pic
         Optional<UserProfile> senderProfile = userProfileRepository.findById(chatMessage.getSenderId());
@@ -347,5 +347,85 @@ public class ChatService {
             // Send to recipient's personal channel for notifications
             messagingTemplate.convertAndSend("/topic/notifications/" + recipientId, dto);
         }
+    }
+    
+    // 🔥 Update message method
+    @Transactional
+    public ChatMessageResponse updateMessage(Long messageId, String newContent, Long userId) {
+        Optional<ChatMessage> messageOpt = chatMessageRepository.findById(messageId);
+        if (messageOpt.isEmpty()) {
+            return null;
+        }
+        
+        ChatMessage message = messageOpt.get();
+        
+        // Verify that the user is the sender of this message
+        if (!message.getSenderId().equals(userId)) {
+            return null;
+        }        // Save original content if this is the first edit
+        if (!message.getIsEdited() && message.getOriginalContent() == null) {
+            message.setOriginalContent(message.getContent());
+        }
+        
+        // Update the message content
+        message.setContent(newContent);
+        message.setUpdatedAt(LocalDateTime.now());
+        message.setIsEdited(true);
+        
+        ChatMessage savedMessage = chatMessageRepository.save(message);
+        
+        // Notify via WebSocket about message update
+        notifyMessageUpdated(savedMessage);
+        
+        return convertToChatMessageResponse(savedMessage);
+    }
+    
+    // 🔥 Delete message method
+    @Transactional
+    public boolean deleteMessage(Long messageId, Long userId) {
+        Optional<ChatMessage> messageOpt = chatMessageRepository.findById(messageId);
+        if (messageOpt.isEmpty()) {
+            return false;
+        }
+        
+        ChatMessage message = messageOpt.get();
+        
+        // Verify that the user is the sender of this message
+        if (!message.getSenderId().equals(userId)) {
+            return false;
+        }
+        
+        // Delete the message
+        chatMessageRepository.delete(message);
+        
+        // Notify via WebSocket about message deletion
+        notifyMessageDeleted(messageId, message.getChatRoomId());
+        
+        return true;
+    }
+    
+    // 🔥 Helper method to notify about message update
+    private void notifyMessageUpdated(ChatMessage chatMessage) {
+        Map<String, Object> updateNotification = new HashMap<>();
+        updateNotification.put("type", "MESSAGE_UPDATED");
+        updateNotification.put("messageId", chatMessage.getId());
+        updateNotification.put("chatRoomId", chatMessage.getChatRoomId());
+        updateNotification.put("newContent", chatMessage.getContent());
+        updateNotification.put("timestamp", LocalDateTime.now());
+        
+        // Send to the chat room's channel
+        messagingTemplate.convertAndSend("/topic/messages/" + chatMessage.getChatRoomId(), updateNotification);
+    }
+    
+    // 🔥 Helper method to notify about message deletion
+    private void notifyMessageDeleted(Long messageId, Long chatRoomId) {
+        Map<String, Object> deleteNotification = new HashMap<>();
+        deleteNotification.put("type", "MESSAGE_DELETED");
+        deleteNotification.put("messageId", messageId);
+        deleteNotification.put("chatRoomId", chatRoomId);
+        deleteNotification.put("timestamp", LocalDateTime.now());
+        
+        // Send to the chat room's channel
+        messagingTemplate.convertAndSend("/topic/messages/" + chatRoomId, deleteNotification);
     }
 }
